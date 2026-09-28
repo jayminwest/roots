@@ -7,7 +7,9 @@
 		"roots": "./src/index.ts"
 	},
 	"main": "src/index.ts",
-	"files": ["src"],
+	"files": [
+		"src"
+	],
 	"private": true,
 	"engines": {
 		"bun": ">=1.0.0"
@@ -23,11 +25,25 @@
 		"lint": "biome check --error-on-warnings .",
 		"lint:fix": "biome check --write --error-on-warnings .",
 		"typecheck": "tsc --noEmit",
-		"verify": "bun run lint && bun run typecheck && bun test --pass-with-no-tests"
+		"check:agents": "bun run scripts/validate-agents-md.ts --known-missing idea.md --known-missing .mulch/archive",
+		"check:dups": "bunx jscpd",
+		"check:deps": "knip --dependencies",
+		"check:size": "bun run scripts/check-file-sizes.ts --budget scripts/file-size-budgets.json",
+		"check:debt": "bun run scripts/check-debt-markers.ts --budget scripts/debt-markers-budget.json",
+		"check:coverage": "bun run scripts/check-coverage.ts --budget scripts/coverage-budgets.json",
+		"check:ci-parity": "bun scripts/check-ci-parity.ts",
+		"check:all": "bun scripts/check-all.ts",
+		"verify": "bun run check:all",
+		"test:ci": "mkdir -p test-results && bun test --coverage --coverage-reporter=text --coverage-reporter=lcov --coverage-dir=coverage --reporter=junit --reporter-outfile=test-results/junit.xml",
+		"report:test-timing": "bun run scripts/report-test-timing.ts",
+		"report:quality": "bun run scripts/report-quality-metrics.ts",
+		"prepare": "[ -e .git ] && git config core.hooksPath scripts/hooks || true"
 	},
 	"devDependencies": {
 		"@biomejs/biome": "^2.4.14",
 		"@types/bun": "latest",
-		"typescript": "^5.9.0"
+		"knip": "^6",
+		"typescript": "^5.9.0",
+		"yaml": "^2.9.0"
 	}
 }

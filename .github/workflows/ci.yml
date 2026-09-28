@@ -1,0 +1,65 @@
+name: CI
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install
+
+      # One step per check:all gate, in manifest order (docs/check-all-standard.md
+      # §2). check:ci-parity fails if this list and the manifest drift apart.
+      - name: Lint
+        run: bun run lint
+      - name: Typecheck
+        run: bun run typecheck
+      - name: AGENTS.md accuracy
+        run: bun run check:agents
+      - name: Duplication budget
+        run: bun run check:dups
+      - name: Unused dependencies
+        run: bun run check:deps
+      - name: File-size ratchet
+        run: bun run check:size
+      - name: Debt-marker ratchet
+        run: bun run check:debt
+      - name: Tests + coverage floors
+        run: bun run check:coverage
+      - name: CI parity
+        run: bun run check:ci-parity
+
+      - name: Run tests (CI reporter)
+        run: bun run test:ci
+
+      - name: Test timing summary
+        if: always()
+        run: bun run report:test-timing >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Code-quality metrics summary
+        if: always()
+        run: bun run report:quality >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload test timing artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bun-test-junit
+          path: test-results/junit.xml
+          if-no-files-found: warn
+
+      - name: Upload coverage artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bun-test-coverage
+          path: coverage/lcov.info
+          if-no-files-found: warn

@@ -98,6 +98,18 @@ This threat model covers *accidental* mixing: an agent that is too helpful, or a
 
 The sprout stays in `agent/` permanently. The lineage is visible, but the texts never merge.
 
+### Actors
+
+Every record that says who did something uses one `by` format:
+
+| Actor | Format | Source |
+|---|---|---|
+| Human | `human:<name>` | `ROOTS_USER`, else `git config user.name` slugified (e.g. `human:jaymin-west`) |
+| Agent | `agent:<model>` | passed by the harness (`--as agent:claude-opus-5-5`) or `ROOTS_AGENT` |
+| Deterministic | `roots` or `roots:<rule>` | the CLI itself |
+
+Human commands require a resolvable name and refuse to run without one. Agent commands refuse `--as human:*`. The `human:` prefix is what marks human content. The name identifies which human wrote it.
+
 ### IDs and slugs
 
 - ID: `r-` + 4 hex characters from a random hash (collision check, extend to 6 when needed). The ID is stable forever.
@@ -122,7 +134,7 @@ or duplicated.
 Not trying to solve: real-time collaboration while offline.
 ```
 
-No frontmatter. No markers written by roots. No `[[links]]`. If the human mentions another idea in prose ("this pulls against the auth idea"), the agent may turn that into a proposal that cites the line.
+No frontmatter. No markers written by roots. No `[[links]]`. If the human mentions another idea in prose ("this pulls against the auth idea"), roots turns that into a link proposal automatically (see [Mentions → proposals](#mentions--proposals)).
 
 ### graph.jsonl
 
@@ -131,22 +143,22 @@ One record per line. There are two record types.
 Node:
 
 ```json
-{"type":"node","id":"r-a1b2","kind":"idea","slug":"offline-sync","status":"shaping","createdAt":"2026-09-28T10:00:00Z","updatedAt":"2026-09-28T10:00:00Z"}
+{"type":"node","id":"r-a1b2","kind":"idea","slug":"offline-sync","status":"shaping","author":"human:jaymin-west","createdAt":"2026-09-28T10:00:00Z","updatedAt":"2026-09-28T10:00:00Z"}
 {"type":"node","id":"s-9f3e","kind":"sprout","slug":"conflict-ui","status":"open","author":"agent:claude-opus-5-5","createdAt":"2026-09-28T11:00:00Z"}
 ```
 
-Idea nodes have no `author` field because the kind *is* the author. Sprout nodes record which agent created them.
+`author` is whoever planted the node: always `human:*` for ideas and always `agent:*` for sprouts. `roots verify` rejects any other combination. Later contributors to an idea (other humans editing in `think` sessions) are recorded in `events.jsonl`, so `roots show` can list everyone who shaped an idea.
 
 The statement (first line of `idea.md`) is not stored in the JSONL. It is read from the file, so the file stays the single source of truth for prose.
 
 Edge:
 
 ```json
-{"type":"edge","id":"e-77c1","from":"r-a1b2","to":"r-c3d4","rel":"serves","by":"human","createdAt":"2026-09-28T12:00:00Z"}
-{"type":"edge","id":"e-81d0","from":"r-a1b2","to":"r-e5f6","rel":"tension","by":"human","proposedBy":"agent:claude-opus-5-5","proposal":"p-3b21","createdAt":"2026-09-28T12:05:00Z"}
+{"type":"edge","id":"e-77c1","from":"r-a1b2","to":"r-c3d4","rel":"serves","by":"human:jaymin-west","createdAt":"2026-09-28T12:00:00Z"}
+{"type":"edge","id":"e-81d0","from":"r-a1b2","to":"r-e5f6","rel":"tension","by":"human:jaymin-west","proposedBy":"agent:claude-opus-5-5","proposal":"p-3b21","createdAt":"2026-09-28T12:05:00Z"}
 ```
 
-`by` is always the party who made the edge real: `human`, either directly or by accepting a proposal. `proposedBy` keeps the agent's contribution visible.
+`by` is always the party who made the edge real: a `human:*` actor, either directly or by accepting a proposal. `proposedBy` keeps the agent's contribution visible.
 
 ### Edge types
 
@@ -182,16 +194,27 @@ Validation at `propose` time (deterministic, rejects the call on failure):
 4. There are at least 2 citations for `edge`/`merge` and at least 1 for `split`/`compost`.
 5. No human rejection of the same `(kind, from, to, rel)` exists. Rejections are permanent memory.
 
-States: `pending → accepted | rejected | expired`. A rejection records an optional human reason.
+States: `pending → accepted | rejected | expired`. Accepting or rejecting records `decidedBy: human:<name>` and an optional reason.
+
+### Mentions → proposals
+
+When a human mentions another idea in prose, that mention becomes a link proposal automatically. The human never has to go back and wire it up.
+
+After each `think` session (and on `roots scan` for edits made outside a session), roots looks for mentions in the lines that changed:
+
+1. **Deterministic match** (every tier, `by: roots:mention`): the changed text contains another node's slug, ID, or a distinctive phrase from its statement (e.g. "the offline sync thing" matches `offline-sync`). Roots files an `edge` proposal with `rel: null`. The human picks the relation in `tend` (`[1] serves  [2] tension  [3] replaces`).
+2. **Agent match** (tier ≥ 2): the context packet for the session end includes the changed spans and a list of candidate ideas. The agent proposes edges for fuzzy mentions ("this pulls against the auth idea") and suggests a `rel`.
+
+Both kinds of proposal must cite the mentioning line as the source quote. That citation makes the human's own words the evidence. Deterministic and agent proposals for the same pair are merged into one card. A mention-derived proposal needs only one citation (the mentioning line) plus the target's statement, which roots fills in.
 
 ### questions.jsonl
 
 ```json
 {"id":"q-5e10","node":"r-a1b2","text":"What happens to an edit made offline on a record someone else deleted?","by":"agent:claude-opus-5-5","status":"open","createdAt":"2026-09-28T10:05:00Z"}
-{"id":"q-5e11","node":"r-a1b2","text":"What would make this done?","by":"roots","rule":"missing-done","status":"answered","answeredAt":"2026-09-28T10:09:00Z","session":"ss-12ab"}
+{"id":"q-5e11","node":"r-a1b2","text":"What would make this done?","by":"roots:missing-done","status":"answered","answeredBy":"human:jaymin-west","answeredAt":"2026-09-28T10:09:00Z","session":"ss-12ab"}
 ```
 
-- `by: roots` means a deterministic rule asked it. `by: agent:<model>` means an agent asked it.
+- `by: roots:<rule>` means a deterministic rule asked it. `by: agent:<model>` means an agent asked it.
 - States: `open → answered | dismissed | snoozed`.
 - Answers are **not** stored here. The answer is whatever the human wrote in `idea.md` during that question's session. `events.jsonl` records the diff span.
 
@@ -296,7 +319,7 @@ Two panes. `roots think` runs in one. nvim runs in the other (or `roots think` l
 - The watcher detects saves. A save that changes the file marks the current question `answered`, records the diff span, and moves to the next question.
 - Nothing is ever inserted into `idea.md`. Questions exist only in the pane.
 - The session ends after `questionsPerSession` questions or on `q`. The session end records the content hash (for `verify`).
-- After the session (tier ≥ 2), the agent may file proposals based on what changed. They go to `tend`, not to this session, so thinking and structuring stay separate.
+- At session end, roots scans the changed lines for mentions of other ideas and files proposals ([Mentions → proposals](#mentions--proposals)). At tier ≥ 2 the agent may also file proposals based on what changed. All of them go to `tend`, not to this session, so thinking and structuring stay separate.
 
 ## CLI
 
@@ -319,6 +342,7 @@ roots tend                               Interactive review: proposals, sprouts,
 roots accept <p-id|s-id>                 Accept a proposal (non-interactive form)
 roots reject <p-id|s-id> [--reason <t>]  Reject; remembered permanently
 roots link <a> <b> <rel>                 Add an edge directly
+roots scan [<id>]                        Find mentions in edits made outside a session
 roots unlink <edge-id>
 roots commit <id>                        Set status to committed
 roots status <id> <status>
@@ -444,7 +468,7 @@ Mulch records may cite `r-` IDs. `roots show` lists mulch learnings attached to 
 1. `init`, `plant`, `show`, `list`, `mv`, ID/slug resolution, `graph.jsonl`, `events.jsonl`.
 2. `think` with deterministic questions only (tier 0). Validate that the loop feels good before adding agents.
 3. `ask`, `context`, `agent.command`: dynamic agent questions (tier 1).
-4. `propose` with citation validation, `tend`, `link`, `accept`/`reject` (tier 2).
+4. `propose` with citation validation, `tend`, `link`, `accept`/`reject`, deterministic mention detection (tier 2).
 5. `sprout`, `adopt`, `note`.
 6. `view` (text, then `--html`), `verify`, `guard`, `setup claude`.
 7. Seeds/mulch integration, `drift` (tier 3).
@@ -453,6 +477,15 @@ Mulch records may cite `r-` IDs. `roots show` lists mulch learnings attached to 
 
 - **Session granularity.** Should the diff span of each answer be linked to its question permanently, so the view can show "this paragraph answered q-5e10"? It is useful for traceability but adds bookkeeping.
 - **Assets.** Can agents attach HTML/PNG artifacts to human ideas only through `agent/notes/`, or should an idea's pane show them inline?
-- **Multiple humans.** Is `by: human` enough, or does it need `human:<name>` from git config? The cost is low, and it matters for teams.
-- **Prose that mentions other ideas.** Should the agent turn it into proposals automatically after each session (tier 2), or only when the human asks?
 - **Evolution vs edit.** When a human rewrites an idea's statement, is that the same idea, or should the tool offer `replaces`? The default is the same idea, and `events.jsonl` keeps the old statement hash.
+
+## Future: `roots lsp`
+
+A language server for `idea.md` files, so related ideas appear while you type:
+
+- **Hover** on a phrase that matches another idea shows that idea's statement and status.
+- **Inlay hints / code lens** at the end of a paragraph: `related: offline-sync, local-first`.
+- **Diagnostics** (hint level): "this paragraph may be a second idea", "mentions r-e5f6, which is in tension with this idea".
+- **Go-to-definition** on a mention opens the other idea's file.
+
+Relatedness is computed by `roots related <id|--text>`: deterministic token overlap (BM25 over statements and prose, zero deps), with optional agent reranking. The LSP is read-only: it never writes into the file and never creates proposals by itself. Mentions still become proposals only through the session-end scan.
