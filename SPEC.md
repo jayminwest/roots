@@ -1,0 +1,458 @@
+# Roots
+
+Git-native intent for projects. Humans write ideas in small pieces over time. Agents help by asking questions and proposing structure. Agents never author human intent.
+
+Seeds tracks *what to do*. Mulch records *what we learned*. Roots holds *why, and toward what*.
+
+## Why
+
+Project vision lives in one of two places, and both fail:
+
+- **In your head.** Agents can't see it and it drifts. Nobody writes the 1000-line vision doc.
+- **In agent-generated planning docs.** They are large, confident and unattributed. After two sessions nobody can tell what the human wanted from what the model invented.
+
+Roots makes intent cheap to add (one line, one question, a few minutes) and keeps provenance explicit: every idea, edge and question has one author, and human and agent content can never be mistaken for each other.
+
+## Design Principles
+
+1. **The human is in charge but not burdened.** Humans write prose and answer yes/no. They never hand-author structure.
+2. **Human and agent content never mix.** They use separate directories, separate ID namespaces and separate record types. There is no command that turns agent text into human text.
+3. **Prose is plain.** Human files are plain Markdown: no frontmatter, no IDs, no link syntax. All structure lives in CLI-owned JSONL.
+4. **The CLI is deterministic.** `roots` contains no LLM. Agents are clients that call the CLI. The CLI checks every agent write (caps, citations, tier).
+5. **Slop is prevented by hard limits, not by good intentions.** Proposals are capped, expire and must cite human text. Nothing unaccepted appears in views.
+6. **Ecosystem fit.** Same stack and conventions as seeds and mulch: Bun/TS, zero deps, JSONL + advisory locks, `--json` on every command.
+
+## Vocabulary
+
+| Term | Meaning |
+|---|---|
+| **Idea** | Atomic unit of intent. Human-authored. One claim, stated in one sentence. ID `r-xxxx`. |
+| **Sprout** | An idea proposed by an agent. Lives only in the agent tree. ID `s-xxxx`. Never becomes an idea. |
+| **Edge** | A typed relationship between two nodes. |
+| **Proposal** | A pending agent suggestion (edge, split, merge). Not part of the graph until a human accepts it. |
+| **Question** | A prompt that guides thinking about one idea. Asked by the agent or by deterministic rules. |
+| **Session** | One `roots think` run on one idea. |
+| **View** | A compiled document rendered from ideas and accepted edges. |
+
+## On-Disk Format
+
+```
+.roots/
+  config.yaml
+  graph.jsonl            # nodes + accepted edges (CLI-owned)
+  proposals.jsonl        # pending agent proposals (CLI-owned, capped)
+  questions.jsonl        # asked questions + status (CLI-owned)
+  events.jsonl           # append-only log of every mutation
+  human/
+    a1b2-offline-sync/
+      idea.md            # human prose only
+      assets/            # images, sketches, html — added by the human
+  agent/
+    sprouts/
+      9f3e-conflict-ui/
+        sprout.md        # agent prose
+        assets/
+    notes/
+      a1b2/              # agent artifacts about human idea r-a1b2 (research, diagrams)
+        2026-09-28-sync-prior-art.md
+  .gitignore             # *.lock
+```
+
+`.gitattributes` (appended to project root):
+
+```
+.roots/*.jsonl merge=union
+```
+
+Dedup on read, last occurrence wins (same as seeds).
+
+### The human/agent boundary
+
+The separation is enforced at every layer:
+
+| Layer | Human | Agent |
+|---|---|---|
+| Directory | `.roots/human/` | `.roots/agent/` |
+| ID prefix | `r-` | `s-` (sprouts), `p-` (proposals), `q-` (questions) |
+| Node kind | `idea` | `sprout` |
+| Rendering | normal | always labeled `[agent]`, dimmed, separate section |
+| Write path | `$EDITOR` in an interactive TTY | non-interactive CLI commands |
+
+Guards:
+
+1. **Commands that create human content require a TTY.** `roots plant`, `roots think` and `roots adopt` refuse to run without an interactive terminal. Agents in harnesses have no TTY.
+2. **Agent commands never write to `human/`.** No code path in `roots` for `propose`, `sprout`, `ask` or `note` touches that tree.
+3. **Harness hooks block direct file edits.** `roots setup claude` installs a PreToolUse hook that denies Write/Edit on `.roots/human/**`.
+4. **Hash ledger.** Every `think` session records a content hash of `idea.md` when it ends. `roots verify` reports human files whose content changed outside a recorded session or a human-authored commit.
+
+This threat model covers *accidental* mixing: an agent that is too helpful, or a user who forgets which file is which. It does not defend against a deliberately malicious actor with shell access.
+
+### Adopting a sprout
+
+`roots adopt s-9f3e` does **not** copy text. It:
+
+1. Creates a new idea `r-xxxx` with an empty `idea.md`.
+2. Opens it in `$EDITOR` with the sprout shown in the watch pane for reference.
+3. The human writes the idea in their own words. If the file is saved empty, the adoption is cancelled.
+4. Records an edge `r-xxxx derives s-9f3e` and sets the sprout's status to `adopted`.
+
+The sprout stays in `agent/` permanently. The lineage is visible, but the texts never merge.
+
+### IDs and slugs
+
+- ID: `r-` + 4 hex characters from a random hash (collision check, extend to 6 when needed). The ID is stable forever.
+- Slug: kebab-case, taken from the idea's first line when the idea is planted. The human can change it.
+- Directory name: `<hex>-<slug>` (e.g. `a1b2-offline-sync`). Humans see the slug. Tools use the hex.
+- Resolution: every command accepts `r-a1b2`, `a1b2`, `offline-sync` or a unique prefix of any of them.
+- `roots mv <id> <new-slug>` renames the directory. Because edges reference IDs, no link breaks. A manual `mv` in the shell also works: on the next read, `roots` matches directories by hex prefix and fixes up the slug.
+
+### idea.md
+
+Plain Markdown. The **first non-empty line is the statement**: the one-sentence claim. Everything after it is free-form prose.
+
+```markdown
+Sync works fully offline, and nobody loses work when the network drops.
+
+Field users lose signal for hours. Today they see a spinner and then an error,
+and anything typed during that time is gone.
+
+Done means: I can edit for a day in airplane mode, reconnect, and nothing is lost
+or duplicated.
+
+Not trying to solve: real-time collaboration while offline.
+```
+
+No frontmatter. No markers written by roots. No `[[links]]`. If the human mentions another idea in prose ("this pulls against the auth idea"), the agent may turn that into a proposal that cites the line.
+
+### graph.jsonl
+
+One record per line. There are two record types.
+
+Node:
+
+```json
+{"type":"node","id":"r-a1b2","kind":"idea","slug":"offline-sync","status":"shaping","createdAt":"2026-09-28T10:00:00Z","updatedAt":"2026-09-28T10:00:00Z"}
+{"type":"node","id":"s-9f3e","kind":"sprout","slug":"conflict-ui","status":"open","author":"agent:claude-opus-5-5","createdAt":"2026-09-28T11:00:00Z"}
+```
+
+Idea nodes have no `author` field because the kind *is* the author. Sprout nodes record which agent created them.
+
+The statement (first line of `idea.md`) is not stored in the JSONL. It is read from the file, so the file stays the single source of truth for prose.
+
+Edge:
+
+```json
+{"type":"edge","id":"e-77c1","from":"r-a1b2","to":"r-c3d4","rel":"serves","by":"human","createdAt":"2026-09-28T12:00:00Z"}
+{"type":"edge","id":"e-81d0","from":"r-a1b2","to":"r-e5f6","rel":"tension","by":"human","proposedBy":"agent:claude-opus-5-5","proposal":"p-3b21","createdAt":"2026-09-28T12:05:00Z"}
+```
+
+`by` is always the party who made the edge real: `human`, either directly or by accepting a proposal. `proposedBy` keeps the agent's contribution visible.
+
+### Edge types
+
+Kept small on purpose. Rich edge typing is where graphs turn to slop.
+
+| rel | Meaning | Constraint |
+|---|---|---|
+| `serves` | A is a means to B | acyclic |
+| `tension` | A and B pull against each other | symmetric; stored once |
+| `replaces` | A supersedes B; B moves to `composted` | acyclic |
+| `derives` | idea A was adopted from sprout B | from `r-` to `s-` only; created by `adopt` |
+
+**Anchors** are ideas with no outgoing `serves`. They are the top-level goals of the project. Nobody declares them. They come from the graph.
+
+### proposals.jsonl
+
+```json
+{"id":"p-3b21","kind":"edge","from":"r-a1b2","to":"r-e5f6","rel":"tension","reason":"offline writes conflict with 'server is the source of truth'","cites":[{"node":"r-a1b2","quote":"nobody loses work when the network drops"},{"node":"r-e5f6","quote":"the server is always authoritative"}],"by":"agent:claude-opus-5-5","status":"pending","createdAt":"2026-09-28T11:30:00Z","expiresAt":"2026-10-12T11:30:00Z"}
+```
+
+Proposal kinds:
+
+- `edge`: add an edge between two existing nodes.
+- `split`: an idea looks like two claims. Accepting it starts a `think` session on the idea, with the proposed split shown as guidance. The human does the split. The agent never does.
+- `merge`: two ideas look like duplicates. Accepting it lets the human choose which idea survives, and the other gets `replaces`.
+- `compost`: an idea looks stale or already covered by others.
+
+Validation at `propose` time (deterministic, rejects the call on failure):
+
+1. The tier allows proposals.
+2. The pending count is below `limits.proposals`.
+3. Every `cites[].quote` is an exact substring of the cited node's current prose.
+4. There are at least 2 citations for `edge`/`merge` and at least 1 for `split`/`compost`.
+5. No human rejection of the same `(kind, from, to, rel)` exists. Rejections are permanent memory.
+
+States: `pending → accepted | rejected | expired`. A rejection records an optional human reason.
+
+### questions.jsonl
+
+```json
+{"id":"q-5e10","node":"r-a1b2","text":"What happens to an edit made offline on a record someone else deleted?","by":"agent:claude-opus-5-5","status":"open","createdAt":"2026-09-28T10:05:00Z"}
+{"id":"q-5e11","node":"r-a1b2","text":"What would make this done?","by":"roots","rule":"missing-done","status":"answered","answeredAt":"2026-09-28T10:09:00Z","session":"ss-12ab"}
+```
+
+- `by: roots` means a deterministic rule asked it. `by: agent:<model>` means an agent asked it.
+- States: `open → answered | dismissed | snoozed`.
+- Answers are **not** stored here. The answer is whatever the human wrote in `idea.md` during that question's session. `events.jsonl` records the diff span.
+
+### events.jsonl
+
+An append-only audit log, one line per mutation: `plant`, `session.start`, `session.end` (with the content hash), `ask`, `answer`, `dismiss`, `propose`, `accept`, `reject`, `expire`, `sprout`, `adopt`, `mv`, `status`, `compost`. Every event has `by`. This is the traceable history of how intent evolved, and it is independent of git history (git remains the backup).
+
+### config.yaml
+
+```yaml
+project: myapp
+version: "1"
+tier: 2                    # see Agent Tiers
+agent:
+  command: "claude -p --model claude-opus-5-5"   # optional; used by `think` to get questions
+limits:
+  proposals: 10            # max pending proposals
+  sprouts: 5               # max open sprouts
+  questionsPerSession: 3
+  proposalTtlDays: 14
+  sproutTtlDays: 30
+view:
+  write: false             # true → `roots view` also writes ROOTS.md at repo root
+```
+
+## Idea Lifecycle
+
+```
+planted → shaping → committed → built
+                                   ↘
+      (any) ──────────────────────→ composted
+```
+
+| Status | Meaning | How it changes |
+|---|---|---|
+| `planted` | Captured, one line | `roots plant` |
+| `shaping` | Being thought about | Automatically after the first `think` session |
+| `committed` | The human stands behind it | `roots commit <id>`, human only |
+| `built` | Realized | `roots status <id> built`, or derived when all linked seeds issues close |
+| `composted` | Retired or replaced | `roots compost <id>`, or a `replaces` edge |
+
+Only a human can change status. Agents can propose `compost`.
+
+Sprouts: `open → adopted | rejected | expired`.
+
+## Agent Tiers
+
+Tiers only widen what an agent may *suggest*. At no tier can an agent write to `human/`, change status, accept a proposal, or create an edge directly.
+
+| Tier | Name | Agent may |
+|---|---|---|
+| 0 | off | nothing. Only deterministic questions |
+| 1 | ask | ask questions (`roots ask`), attach notes (`roots note`) |
+| 2 | propose | tier 1 + proposals (`roots propose`) + sprouts (`roots sprout`) |
+| 3 | observe | tier 2 + may run from harness hooks on repo activity (drift checks) |
+
+A per-idea override (`roots tier <id> 0`) keeps the agent out of ideas the human wants to think about alone.
+
+## Questions: guiding thinking
+
+Questions drive the rustlings loop. They come from two sources and are merged into one queue per session.
+
+**Deterministic rules** (always on, cheap):
+
+| Rule | Trigger | Example |
+|---|---|---|
+| `missing-done` | no "done" language after N sessions | "What would make this done?" |
+| `missing-scope` | no "not"/"won't" language | "What is this *not* trying to solve?" |
+| `too-big` | statement contains "and" / body > N lines | "Is this one idea or two?" |
+| `orphan` | idea has no edges after N days | "What does this serve?" |
+| `tension-open` | unresolved `tension` edge | "Which of these wins when they conflict?" |
+| `stale` | not touched in N days while `committed` | "Is this still true?" |
+
+**Agent questions** (tier ≥ 1) are dynamic from the first session. Before a session, `roots` builds a context packet (`roots context <id> --json`): the idea's prose, neighbors, prior questions and dismissals, rejected proposals, and relevant repo state. It then either:
+
+- runs `agent.command` with that packet and a fixed instruction to call `roots ask` up to `limits.questionsPerSession` times, or
+- waits for an already-running harness (e.g. Claude Code in another pane) to call `roots ask`.
+
+The questions an agent should ask are specific to *this* idea ("What happens to an offline edit on a deleted record?"), never generic. Dismissed questions go into the next context packet so the agent learns what not to ask.
+
+## The `think` Loop (UX)
+
+Two panes. `roots think` runs in one. nvim runs in the other (or `roots think` launches `$EDITOR` in a split when running inside tmux, zellij or herdr).
+
+```
+┌─ roots think offline-sync ─────────────┐┌─ nvim .roots/human/a1b2-offline-sync/idea.md ─┐
+│ r-a1b2  offline-sync        shaping    ││ Sync works fully offline, and nobody loses   │
+│ "Sync works fully offline, and…"       ││ work when the network drops.                  │
+│                                        ││                                               │
+│ serves   → r-c3d4 local-first          ││ Field users lose signal for hours…            │
+│ tension  ↔ r-e5f6 server-authoritative ││                                               │
+│                                        ││ █                                             │
+│ ── question 2/3 ── [agent] ─────────── ││                                               │
+│ What happens to an offline edit on a   ││                                               │
+│ record someone else deleted?           ││                                               │
+│                                        ││                                               │
+│ [save] answer  [d] dismiss  [z] snooze ││                                               │
+│ [s] skip       [q] end session         ││                                               │
+└────────────────────────────────────────┘└───────────────────────────────────────────────┘
+```
+
+- The watcher detects saves. A save that changes the file marks the current question `answered`, records the diff span, and moves to the next question.
+- Nothing is ever inserted into `idea.md`. Questions exist only in the pane.
+- The session ends after `questionsPerSession` questions or on `q`. The session end records the content hash (for `verify`).
+- After the session (tier ≥ 2), the agent may file proposals based on what changed. They go to `tend`, not to this session, so thinking and structuring stay separate.
+
+## CLI
+
+Binary name: `roots`. Every command supports `--json`. Commands marked **(human)** require a TTY. Commands marked **(agent)** are checked against the tier and limits and never touch `human/`.
+
+### Capture and think (human)
+
+```
+roots init                               Initialize .roots/
+roots plant [<statement>]                Create an idea. With no argument, opens $EDITOR
+roots think [<id>]                       Run a think session. With no id, picks from the queue
+roots adopt <sprout-id>                  Create a new idea from a sprout (human rewrites; see above)
+roots mv <id> <new-slug>                 Rename (ID is stable)
+```
+
+### Structure (human)
+
+```
+roots tend                               Interactive review: proposals, sprouts, expiring items
+roots accept <p-id|s-id>                 Accept a proposal (non-interactive form)
+roots reject <p-id|s-id> [--reason <t>]  Reject; remembered permanently
+roots link <a> <b> <rel>                 Add an edge directly
+roots unlink <edge-id>
+roots commit <id>                        Set status to committed
+roots status <id> <status>
+roots compost <id> [--reason <t>]
+roots tier <id> <0-3>                    Per-idea agent tier override
+```
+
+`tend` shows one card at a time, and each takes one keystroke:
+
+```
+┌ proposal p-3b21 ── [agent] claude-opus-5-5 ── expires in 11d ─┐
+│ offline-sync  ↔ tension ↔  server-authoritative                │
+│                                                                │
+│ "offline writes conflict with 'server is the source of truth'" │
+│   r-a1b2: "nobody loses work when the network drops"           │
+│   r-e5f6: "the server is always authoritative"                 │
+│                                                                │
+│ [y] accept  [n] reject  [r] reject w/ reason  [s] skip          │
+└────────────────────────────────────────────────────────────────┘
+```
+
+### Agent-facing (agent)
+
+```
+roots context <id>                       Context packet for one idea (prose, neighbors, history)
+roots prime [--scope <id>]               Accepted graph as agent context (anchors → committed ideas)
+roots ask <id> <question>                Queue a question                          tier ≥ 1
+roots note <id> --file <path>            Attach an artifact under agent/notes/<id>/ tier ≥ 1
+roots propose edge <a> <b> <rel> --reason <t> --cite <id>:<quote> ...          tier ≥ 2
+roots propose split|merge|compost ...                                          tier ≥ 2
+roots sprout <statement> [--file <md>]   Propose a new idea (agent tree)           tier ≥ 2
+```
+
+### Read (anyone)
+
+```
+roots show <id>                          Idea/sprout with edges, questions, history
+roots list [--status <s>] [--kind idea|sprout] [--orphans] [--anchors]
+roots queue                              What needs attention: open questions, pending proposals
+roots view [--from <id>] [--sprouts] [--html]   Compiled culmination
+roots log [<id>]                         Event history
+roots verify                             Check the human/agent boundary + graph invariants
+```
+
+### JSON output
+
+Same shape as seeds:
+
+```json
+{ "success": true, "command": "propose", "id": "p-3b21" }
+{ "success": false, "command": "propose", "error": "cite quote not found in r-e5f6" }
+```
+
+## Views: the culmination
+
+`roots view` compiles one readable document from the graph:
+
+1. Find the anchors (`committed`/`shaping` ideas with no outgoing `serves`).
+2. For each anchor, print its statement and prose, then walk the incoming `serves` edges depth-first in topological order.
+3. An idea that serves more than one anchor is printed in full once. Later occurrences are back-references.
+4. After the tree: **Tensions** (all unresolved `tension` pairs) and **Open questions**.
+5. `composted` ideas and all sprouts are excluded. `--sprouts` appends a separate section labeled **Agent proposals (not accepted)**.
+
+It contains only human prose and human-accepted structure. The output goes to stdout by default. `--html` renders a static page with a graph visual and a timeline per idea from `events.jsonl`. With `view.write: true` it also writes `ROOTS.md` at the repo root, so PR diffs show how intent changed.
+
+## Integration
+
+### Claude Code (and other harnesses)
+
+`roots setup claude` installs:
+
+```json
+{
+  "hooks": {
+    "SessionStart": [{ "command": "roots prime" }],
+    "PreToolUse": [{
+      "matcher": "Write|Edit|MultiEdit",
+      "command": "roots guard",
+      "description": "Deny agent writes to .roots/human/**"
+    }]
+  }
+}
+```
+
+At tier 3, it also installs a Stop hook: `roots drift --diff HEAD` hands the agent a context packet of the ideas the diff touches, so the agent can `ask` "does this still hold?". It never blocks.
+
+Other harnesses use the same CLI. Only the hook wiring differs.
+
+### Seeds
+
+- `sd create --intent r-a1b2` links an issue to an idea (a seeds-side field).
+- `roots show` lists the linked issues. When every linked issue is closed, `roots queue` prompts the human to mark the idea `built`.
+- Committing an idea can prompt "Create seeds issues?" at tier ≥ 2, and the agent proposes them as sprout-like drafts in seeds.
+
+### Mulch
+
+Mulch records may cite `r-` IDs. `roots show` lists mulch learnings attached to an idea.
+
+## What Roots Does NOT Do
+
+- **No LLM inside.** Agents call `roots`. `roots` calls an agent only through the user-configured `agent.command`.
+- **No agent-authored human content.** No tier, flag or config enables it.
+- **No hierarchy.** No folders of folders and no parent field. Structure is edges only.
+- **No frontmatter, and no markers in human prose.**
+- **No auto-accept.** Every edge in the graph was made or accepted by a human.
+- **No daemon.** `think` is a foreground process for one session.
+- **No git automation.** Roots does not commit. The human commits, the same as with code.
+
+## Tech Stack
+
+| Concern | Choice |
+|---|---|
+| Runtime | Bun |
+| Language | TypeScript (strict) |
+| Dependencies | Zero runtime |
+| Storage | JSONL + plain Markdown |
+| Locking | Advisory file locks, atomic writes (seeds pattern) |
+| TUI | Raw ANSI, `fs.watch` for saves |
+| Testing | `bun test`, real I/O |
+
+## Build Order
+
+1. `init`, `plant`, `show`, `list`, `mv`, ID/slug resolution, `graph.jsonl`, `events.jsonl`.
+2. `think` with deterministic questions only (tier 0). Validate that the loop feels good before adding agents.
+3. `ask`, `context`, `agent.command`: dynamic agent questions (tier 1).
+4. `propose` with citation validation, `tend`, `link`, `accept`/`reject` (tier 2).
+5. `sprout`, `adopt`, `note`.
+6. `view` (text, then `--html`), `verify`, `guard`, `setup claude`.
+7. Seeds/mulch integration, `drift` (tier 3).
+
+## Open Questions
+
+- **Session granularity.** Should the diff span of each answer be linked to its question permanently, so the view can show "this paragraph answered q-5e10"? It is useful for traceability but adds bookkeeping.
+- **Assets.** Can agents attach HTML/PNG artifacts to human ideas only through `agent/notes/`, or should an idea's pane show them inline?
+- **Multiple humans.** Is `by: human` enough, or does it need `human:<name>` from git config? The cost is low, and it matters for teams.
+- **Prose that mentions other ideas.** Should the agent turn it into proposals automatically after each session (tier 2), or only when the human asks?
+- **Evolution vs edit.** When a human rewrites an idea's statement, is that the same idea, or should the tool offer `replaces`? The default is the same idea, and `events.jsonl` keeps the old statement hash.

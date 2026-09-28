@@ -1,0 +1,31 @@
+{
+	"$schema": "https://biomejs.dev/schemas/2.5.14/schema.json",
+	"files": {
+		"includes": ["src/**", "scripts/**", "!**/node_modules"]
+	},
+	"assist": { "actions": { "source": { "organizeImports": "on" } } },
+	"linter": {
+		"enabled": true,
+		"rules": {
+			"preset": "recommended",
+			"suspicious": { "noExplicitAny": "error" },
+			"style": {
+				"noNonNullAssertion": "error",
+				"useConst": "error",
+				"useImportType": "error",
+				"useNodejsImportProtocol": "error",
+				"useFilenamingConvention": {
+					"level": "error",
+					"options": { "strictCase": true, "requireAscii": true, "filenameCases": ["kebab-case"] }
+				}
+			},
+			"complexity": {
+				"noExcessiveCognitiveComplexity": {
+					"level": "error",
+					"options": { "maxAllowedComplexity": 15 }
+				}
+			}
+		}
+	},
+	"formatter": { "enabled": true, "indentStyle": "tab", "lineWidth": 100 }
+}

@@ -1,0 +1,33 @@
+{
+	"name": "@os-eco/roots-cli",
+	"version": "0.0.0",
+	"description": "Git-native intent for projects: humans write ideas, agents ask and propose",
+	"type": "module",
+	"bin": {
+		"roots": "./src/index.ts"
+	},
+	"main": "src/index.ts",
+	"files": ["src"],
+	"private": true,
+	"engines": {
+		"bun": ">=1.0.0"
+	},
+	"author": "Jaymin West",
+	"license": "MIT",
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/jayminwest/roots.git"
+	},
+	"scripts": {
+		"test": "bun test",
+		"lint": "biome check --error-on-warnings .",
+		"lint:fix": "biome check --write --error-on-warnings .",
+		"typecheck": "tsc --noEmit",
+		"verify": "bun run lint && bun run typecheck && bun test --pass-with-no-tests"
+	},
+	"devDependencies": {
+		"@biomejs/biome": "^2.4.14",
+		"@types/bun": "latest",
+		"typescript": "^5.9.0"
+	}
+}
