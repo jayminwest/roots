@@ -1,0 +1,7 @@
+{"id":"roots-4143","title":"Core: init, plant, show, list, mv, ID/slug resolution, graph.jsonl, events.jsonl","status":"open","type":"feature","priority":1,"createdAt":"2026-09-28T19:39:34.732Z","updatedAt":"2026-09-28T19:39:34.732Z"}
+{"id":"roots-b0ea","title":"think loop with deterministic questions (tier 0)","status":"open","type":"feature","priority":1,"createdAt":"2026-09-28T19:39:34.773Z","updatedAt":"2026-09-28T19:39:34.773Z"}
+{"id":"roots-e3a2","title":"Agent questions: ask, context, agent.command (tier 1)","status":"open","type":"feature","priority":2,"createdAt":"2026-09-28T19:39:34.814Z","updatedAt":"2026-09-28T19:39:34.814Z"}
+{"id":"roots-9c29","title":"propose with citation validation, tend, link, accept/reject (tier 2)","status":"open","type":"feature","priority":2,"createdAt":"2026-09-28T19:39:34.853Z","updatedAt":"2026-09-28T19:39:34.853Z"}
+{"id":"roots-031e","title":"sprout, adopt, note","status":"open","type":"feature","priority":2,"createdAt":"2026-09-28T19:39:34.895Z","updatedAt":"2026-09-28T19:39:34.895Z"}
+{"id":"roots-ecaa","title":"view (text, --html), verify, guard, setup claude","status":"open","type":"feature","priority":2,"createdAt":"2026-09-28T19:39:34.934Z","updatedAt":"2026-09-28T19:39:34.934Z"}
+{"id":"roots-4689","title":"Seeds/mulch integration, drift (tier 3)","status":"open","type":"feature","priority":3,"createdAt":"2026-09-28T19:39:34.972Z","updatedAt":"2026-09-28T19:39:34.972Z"}
