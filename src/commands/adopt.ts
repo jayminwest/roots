@@ -1,7 +1,7 @@
 // roots adopt <sprout-id> (human, TTY): create a new idea from a sprout. The
 // human writes it in their own words: $EDITOR opens on an EMPTY idea.md and
 // the sprout is shown only for reference (a read-only pager in a split pane
-// when tmux/zellij/herdr is detected, and always printed to stderr before
+// when tmux/zellij is detected, and always printed to stderr before
 // the editor opens). Sprout text is never copied into idea.md. Saving an
 // empty file cancels: no node, no files, no events. See src/adopt.ts.
 
@@ -11,6 +11,7 @@ import { flagBool, flagString } from "../args.ts";
 import type { Decision } from "../decide.ts";
 import { requireHumanCommand, requireTty } from "../guard.ts";
 import type { Io } from "../io.ts";
+import { printNext } from "../next.ts";
 import type { RootsPaths } from "../paths.ts";
 import { readNodeProse } from "../prose.ts";
 import type { CommandDef } from "../registry.ts";
@@ -87,7 +88,7 @@ export const adoptCommand: CommandDef = {
 	usage: "adopt <sprout-id>",
 	description:
 		"Opens $EDITOR on an EMPTY idea.md; the sprout is shown for reference only (in a\n" +
-		"split pane under tmux/zellij/herdr, and printed before the editor opens). Write\n" +
+		"split pane under tmux/zellij, and printed before the editor opens). Write\n" +
 		"the idea in your own words; nothing is copied. Saving an empty file cancels.\n" +
 		"Records `<new idea> derives <sprout>` and marks the sprout adopted. Needs an\n" +
 		"interactive terminal and a human name (ROOTS_USER or git user.name).",
@@ -125,5 +126,6 @@ export const adoptCommand: CommandDef = {
 		await out.info(
 			`  ${out.c.dim(`${d.sprout?.file ?? ""} · ${d.edge?.id} derives ${sprout.id}`)}`,
 		);
+		await printNext(out, ws.paths);
 	},
 };

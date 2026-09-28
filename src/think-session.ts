@@ -4,9 +4,10 @@
 // shaping, session.end with the content hash for verify's hash ledger).
 //
 // Event order for one session:
-//   session.start, ask*, (answer | dismiss | snooze)*, propose*/expire*
-//   (mentions, then the agent's at tier ≥ 2), status (first session only),
-//   session.end
+//   session.start, ask*, (answer | dismiss | snooze | delegate)*,
+//   propose*/expire* (mentions, then the agent's at tier ≥ 2), status (first
+//   session only), session.end, then note*/undelegate* when questions were
+//   delegated with [a] (the research run, delegation.ts)
 // Skips are not mutations and log nothing.
 //
 // Agents (tier ≥ 1, see agent-phase.ts): after session.start, agent.command
@@ -16,9 +17,10 @@
 // ask`) are queued live through the reducer's `arrive` input.
 
 import { existsSync, readFileSync } from "node:fs";
-import { type AgentPhase, agentNotice, runAgentPhase, runProposalPhase } from "./agent-phase.ts";
+import { lineHash } from "./blame.ts";
 import type { Colors } from "./color.ts";
 import type { RootsConfig } from "./config.ts";
+import { findingPreview } from "./delegation.ts";
 import { type ChangedLine, changedLines, type DiffSpan, diffSpan, formatSpan } from "./diff.ts";
 import { NotFoundError } from "./errors.ts";
 import { appendEvent, makeEvent, readEvents } from "./events.ts";
@@ -30,6 +32,7 @@ import { contentHash, parseProse, readNodeProse } from "./prose.ts";
 import {
 	addQuestions,
 	answerQuestion,
+	delegateQuestion,
 	dismissQuestion,
 	draftFromCandidate,
 	dueQuestions,
@@ -54,12 +57,32 @@ import {
 import type { StatusLine } from "./spinner.ts";
 import { frame, type Terminal } from "./terminal.ts";
 import {
+	type BackgroundJob,
+	phaseNotice,
+	type SessionAgentSummary,
+	type SessionDelegationSummary,
+	type SessionProposalSummary,
+	sessionAgentPhase,
+	sessionDelegation,
+	sessionProposals,
+	summarizeAgent,
+} from "./think-agent.ts";
+import {
 	renderScreen,
 	type ScreenEdge,
+	type ScreenFinding,
 	type ScreenGuidance,
 	type ScreenView,
 } from "./think-screen.ts";
 import { isoNow } from "./time.ts";
+
+export type {
+	BackgroundJob,
+	SessionAgentSummary,
+	SessionDelegationSummary,
+	SessionProposalSummary,
+};
+
 import type { Actor, Graph, NodeRecord, QuestionRecord } from "./types.ts";
 import { type WatchOptions, watchFile } from "./watch.ts";
 
@@ -81,18 +104,13 @@ export interface ThinkDeps {
 	agentTimeoutMs?: number;
 	/** Shown on the screen for the whole session (e.g. an accepted split from `tend`). */
 	guidance?: ScreenGuidance | null;
-}
-
-export interface SessionAgentSummary {
-	mode: AgentPhase["mode"];
-	tier: number;
-	actor: Actor | null;
-	status: string | null;
-	error: string | null;
-	/** Asked by agent.command before the session started. */
-	asked: number;
-	/** Agent questions queued live during the session. */
-	arrived: number;
+	/**
+	 * Background mode (`roots flow`): agent.command runs without blocking the
+	 * session (its questions arrive live) and is handed to this callback; the
+	 * session-end proposal run is skipped and left to the caller, which gets
+	 * the changed lines in the summary.
+	 */
+	background?: (job: BackgroundJob) => void;
 }
 
 export interface SessionQuestionSummary {
@@ -116,35 +134,10 @@ export interface SessionSummary {
 	agent: SessionAgentSummary;
 	/** Session-end agent proposals (tier ≥ 2 with agent.command); null when skipped. */
 	proposals: SessionProposalSummary | null;
-}
-
-export interface SessionProposalSummary {
-	actor: Actor;
-	status: string;
-	error: string | null;
-	filed: string[];
-}
-
-async function agentProposals(live: Live, changed: ChangedLine[]) {
-	const { deps } = live;
-	if (!live.agentsLive) return null;
-	const phase = await runProposalPhase({
-		paths: deps.paths,
-		config: deps.config,
-		node: deps.node,
-		session: live.session,
-		changed,
-		env: deps.env ?? {},
-		status: deps.agentStatus,
-		timeoutMs: deps.agentTimeoutMs,
-	});
-	if (!phase) return null;
-	return {
-		actor: phase.actor,
-		status: phase.run.status,
-		error: phase.run.error,
-		filed: phase.filed,
-	};
+	/** Research on questions delegated with [a] (run after session.end); null when none. */
+	delegation: SessionDelegationSummary | null;
+	/** Background mode only: the lines this session changed (for the caller's proposal run). */
+	changedLines?: ChangedLine[];
 }
 
 export function questionSource(q: Pick<QuestionRecord, "by">): string {
@@ -209,6 +202,13 @@ interface Live {
 	agentsLive: boolean;
 	/** Question ids already considered (in the queue at start or seen since). */
 	seen: Set<string>;
+	/** Findings previews by question id (read once per session). */
+	findings: Map<string, ScreenFinding | null>;
+}
+
+function findingFor(live: Live, q: QuestionRecord): ScreenFinding | null {
+	if (!live.findings.has(q.id)) live.findings.set(q.id, findingPreview(live.deps.paths, q));
+	return live.findings.get(q.id) ?? null;
 }
 
 function view(live: Live): ScreenView {
@@ -226,8 +226,10 @@ function view(live: Live): ScreenView {
 					source: questionSource(q),
 					index: live.state.index + 1,
 					total: live.state.questions.length,
+					findings: findingFor(live, q),
 				}
 			: null,
+		canDelegate: live.state.canDelegate,
 		notice: live.state.notice,
 		editorHint: live.deps.editorHint,
 		guidance: live.deps.guidance ?? null,
@@ -236,16 +238,22 @@ function view(live: Live): ScreenView {
 
 function render(live: Live): void {
 	const t = live.deps.terminal;
-	t.write(frame(renderScreen(view(live), t.columns(), live.deps.colors)));
+	t.write(frame(renderScreen(view(live), t.columns(), live.deps.colors, t.rows())));
 }
 
 async function execute(live: Live, effect: SessionEffect): Promise<void> {
 	const { paths, by, config } = live.deps;
 	const act = { by, session: live.session, at: (live.deps.clock ?? (() => new Date()))() };
 	if (effect.type === "answer") {
-		await answerQuestion(paths, effect.question.id, { ...act, span: effect.span });
+		await answerQuestion(paths, effect.question.id, {
+			...act,
+			span: effect.span,
+			lines: effect.lines,
+		});
 	} else if (effect.type === "dismiss") {
 		await dismissQuestion(paths, effect.question.id, act);
+	} else if (effect.type === "delegate") {
+		await delegateQuestion(paths, effect.question.id, act);
 	} else if (effect.type === "snooze") {
 		await snoozeQuestion(paths, effect.question.id, { ...act, days: config.questions.snoozeDays });
 	}
@@ -279,10 +287,11 @@ function drive(live: Live): {
 
 function onSave(live: Live, dispatch: (i: SessionInput, label?: string) => void, text: string) {
 	const span: DiffSpan | null = diffSpan(live.lastText, text);
+	const lines = changedLines(live.lastText, text).map((l) => lineHash(l.text));
 	live.lastText = text;
 	if (!span) return;
 	live.statement = parseProse(text).statement;
-	dispatch({ type: "save", span }, formatSpan(span));
+	dispatch({ type: "save", span, lines }, formatSpan(span));
 }
 
 /** Open agent questions for this idea that the session has not seen yet. */
@@ -362,18 +371,6 @@ async function fileMentions(deps: ThinkDeps, lines: ChangedLine[], now: Date) {
 	}
 }
 
-function agentSummary(phase: AgentPhase, live: Live, initial: Set<string>): SessionAgentSummary {
-	return {
-		mode: phase.mode,
-		tier: phase.tier.tier,
-		actor: phase.actor,
-		status: phase.run?.status ?? null,
-		error: phase.run?.error ?? null,
-		asked: phase.asked,
-		arrived: live.state.questions.filter((q) => !initial.has(q.id)).length,
-	};
-}
-
 async function finalize(
 	live: Live,
 	startText: string,
@@ -386,7 +383,8 @@ async function finalize(
 	const hash = contentHash(finalText);
 	const lines = changedLines(startText, finalText);
 	const { mentions, mentionError } = await fileMentions(deps, lines, now);
-	const proposals = await agentProposals(live, lines);
+	const proposals =
+		deps.background || !live.agentsLive ? null : await sessionProposals(deps, session, lines);
 	const statusChange = await markShaping(deps, session, now);
 	const t = tally(state);
 	const reason = state.ended ?? "quit";
@@ -402,6 +400,7 @@ async function finalize(
 			...t,
 		}),
 	);
+	const delegation = await sessionDelegation(deps, session);
 	return {
 		session,
 		node: deps.node.id,
@@ -420,6 +419,8 @@ async function finalize(
 		mentionError,
 		agent,
 		proposals,
+		delegation,
+		...(deps.background ? { changedLines: lines } : {}),
 	};
 }
 
@@ -436,29 +437,22 @@ export async function runThinkSession(deps: ThinkDeps): Promise<SessionSummary> 
 		makeEvent("session.start", deps.by, { at: isoNow(now), node: deps.node.id, session }),
 	);
 	const graph = readGraph(deps.paths);
-	const phase = await runAgentPhase({
-		paths: deps.paths,
-		config: deps.config,
-		node: deps.node,
-		graph,
-		session,
-		env: deps.env ?? {},
-		status: deps.agentStatus,
-		timeoutMs: deps.agentTimeoutMs,
-	});
+	const phase = await sessionAgentPhase(deps, graph, session);
 	const agents = phase.mode !== "off";
 	const questions = await prepareQuestions(deps, graph, prose.text, session, now, agents);
 	const initial = new Set(questions.map((q) => q.id));
 	const live: Live = {
 		deps,
 		session,
-		state: { ...initialState(questions), notice: agentNotice(phase) },
+		state: { ...initialState(questions, agents), notice: phaseNotice(deps, phase) },
 		lastText: prose.text,
 		statement: prose.statement,
 		edges: screenEdges(graph, deps.node),
 		agentsLive: agents,
 		seen: new Set(readQuestions(deps.paths).map((q) => q.id)),
+		findings: new Map(),
 	};
 	await interact(live, prose.path);
-	return finalize(live, prose.text, agentSummary(phase, live, initial));
+	const arrived = live.state.questions.filter((q) => !initial.has(q.id)).length;
+	return finalize(live, prose.text, summarizeAgent(deps, phase, session, arrived));
 }

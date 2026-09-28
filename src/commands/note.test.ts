@@ -5,6 +5,7 @@ import { EXIT } from "../errors.ts";
 import { readEvents } from "../events.ts";
 import { NOTE_MAX_BYTES, noteFileName } from "../notes.ts";
 import { rootsPaths } from "../paths.ts";
+import { addQuestions, delegateQuestion, readQuestions } from "../questions.ts";
 import { initProject, plant, run, runJson } from "../test-helpers.ts";
 
 const AGENT = ["--as", "agent:opus"];
@@ -70,6 +71,36 @@ describe("roots note", () => {
 		const s = await runJson<{ id: string }>(["sprout", "A sprout", ...AGENT], root);
 		const onSprout = await runJson(["note", s.body.id, "--file", "Prior Art.md", ...AGENT], root);
 		expect(onSprout.exitCode).toBe(EXIT.usage);
+	});
+
+	test("--question: delegated questions on this idea only, text files only", async () => {
+		const { root, a, paths } = await setup();
+		const b = await plant(root, "Conflicts are shown to the user");
+		const [q, other] = await addQuestions(paths, [
+			{ node: a, text: "Which services sync?", by: "roots:missing-done" },
+			{ node: b, text: "Who resolves?", by: "roots:missing-done" },
+		]);
+		const qid = q?.id ?? "";
+		const note = (file: string, id = qid, node = a) =>
+			runJson<Noted & { question: string | null }>(
+				["note", node, "--file", file, "--question", id, ...AGENT],
+				root,
+			);
+		const notDelegated = await note("Prior Art.md");
+		expect(notDelegated.exitCode).toBe(EXIT.validation);
+		expect(notDelegated.body.error).toContain("is open; findings go only on questions");
+		await delegateQuestion(paths, qid, { by: "human:jay", session: "ss-0001" });
+		await delegateQuestion(paths, other?.id ?? "", { by: "human:jay", session: "ss-0001" });
+		expect((await note("Prior Art.md", other?.id)).body.error).toContain(`not ${a}`);
+		expect((await note("Prior Art.md", "q-dead")).exitCode).toBe(EXIT.notFound);
+		writeFileSync(join(root, "chart.svg"), "<svg/>");
+		expect((await note("chart.svg")).body.error).toContain("must be a text file");
+		const ok = await note("Prior Art.md");
+		expect(ok.exitCode).toBe(0);
+		expect(ok.body.question).toBe(qid);
+		const back = readQuestions(paths).find((x) => x.id === qid);
+		expect(back).toMatchObject({ status: "open", findings: [{ note: ok.body.note.path }] });
+		expect((await note("Prior Art.md")).body.error).toContain("is open");
 	});
 
 	test("noteFileName sanitizes every part", () => {

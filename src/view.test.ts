@@ -1,8 +1,17 @@
 import { describe, expect, test } from "bun:test";
-import { existsSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import {
+	appendFileSync,
+	existsSync,
+	readdirSync,
+	readFileSync,
+	statSync,
+	writeFileSync,
+} from "node:fs";
 import { join } from "node:path";
+import { lineHash } from "./blame.ts";
 import { updateGraph } from "./graph.ts";
 import { rootsPaths } from "./paths.ts";
+import { contentHash } from "./prose.ts";
 import {
 	forceStatus,
 	initProject,
@@ -109,6 +118,47 @@ describe("roots view (markdown)", () => {
 		expect(md).toContain(
 			`- \`${f.sync}\` sync: What if two devices edit offline? _([agent] agent:test)_`,
 		);
+	});
+
+	test("answered paragraphs are labeled with their question (hashes, or replayed spans)", async () => {
+		const f = await fixture();
+		const text =
+			"Field users never lose work\n\nThey lose signal for hours.\n\nA day offline is fine.\n";
+		writeFileSync(join(ideaFile(f.root, f.goal), "idea.md"), text);
+		const paths = rootsPaths(f.root);
+		const q = (id: string, by: string, t: string) =>
+			JSON.stringify({ id, node: f.goal, text: t, by, status: "answered", createdAt: "x" });
+		appendFileSync(
+			paths.questions,
+			`${q("q-0001", "agent:m", "How long offline?")}\n${q("q-0002", "roots:missing-scope", "Who?")}\n`,
+		);
+		const ev = (o: object) => JSON.stringify({ by: "human:t", at: "x", node: f.goal, ...o });
+		const events = [
+			ev({
+				type: "answer",
+				question: "q-0001",
+				session: "ss-1",
+				lines: [lineHash("A day offline is fine.")],
+			}),
+			// no line hashes: placed by replaying ss-2's span, since the file is unchanged since
+			ev({
+				type: "answer",
+				question: "q-0002",
+				session: "ss-2",
+				span: { from: 3, to: 3, removed: 0 },
+			}),
+			ev({ type: "session.end", session: "ss-2", hash: contentHash(text) }),
+		];
+		appendFileSync(paths.events, `${events.join("\n")}\n`);
+		const md = (await run(["view"], f.root)).stdout;
+		expect(md).toContain(
+			"> **Q:** Who? _(`q-0002` · roots:missing-scope)_\n\nThey lose signal for hours.",
+		);
+		expect(md).toContain(
+			"> **Q:** How long offline? _(`q-0001` · [agent] m)_\n\nA day offline is fine.",
+		);
+		const html = (await run(["view", "--html"], f.root)).stdout;
+		expect(html).toContain('<p class="q agent"><b>Q:</b> How long offline?');
 	});
 
 	test("--sprouts appends a separate [agent] section; sprouts never appear otherwise", async () => {

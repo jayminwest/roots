@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { readFileSync, writeFileSync } from "node:fs";
+import { lineHash } from "./blame.ts";
 import { makeColors } from "./color.ts";
 import { defaultConfig } from "./config.ts";
 import { readEvents } from "./events.ts";
@@ -82,7 +83,11 @@ describe("runThinkSession", () => {
 			"status",
 			"session.end",
 		]);
-		expect(events[3]).toMatchObject({ span: { from: 2, to: 3, removed: 0 }, question: qs[0]?.id });
+		expect(events[3]).toMatchObject({
+			span: { from: 2, to: 3, removed: 0 },
+			lines: [lineHash("Done means: a day in airplane mode.")],
+			question: qs[0]?.id,
+		});
 		expect(events.at(-1)).toMatchObject({ hash: s.hash, session: s.session, changed: true });
 		expect(findNode(readGraph(paths), id)?.status).toBe("shaping");
 	});

@@ -1,19 +1,18 @@
 // Open $EDITOR (or, for `roots adopt`, a pager on the sprout) in a split
 // pane next to roots, when a terminal
-// multiplexer is detectable. Detection: $TMUX (tmux), $ZELLIJ (zellij),
-// $HERDR_PANE_ID / $HERDR_ENV (herdr). Otherwise the human opens the file in
-// another pane themselves; think prints the path.
+// multiplexer is detectable. Detection: $TMUX (tmux), $ZELLIJ (zellij).
+// Otherwise the human opens the file in another pane themselves; think
+// prints the path.
 
 import { spawnSync } from "node:child_process";
 import { resolveEditor } from "./editor.ts";
 import type { Io } from "./io.ts";
 
-export type Multiplexer = "tmux" | "zellij" | "herdr";
+export type Multiplexer = "tmux" | "zellij";
 
 export function detectMultiplexer(env: Io["env"]): Multiplexer | null {
 	if (env.TMUX) return "tmux";
 	if (env.ZELLIJ !== undefined && env.ZELLIJ !== "") return "zellij";
-	if (env.HERDR_PANE_ID || env.HERDR_ENV === "1") return "herdr";
 	return null;
 }
 
@@ -27,7 +26,7 @@ export function shellQuote(s: string): string {
  * it (tmux `-d`); zellij focuses the new pane regardless.
  */
 export function splitArgv(
-	mux: "tmux" | "zellij",
+	mux: Multiplexer,
 	editor: string,
 	file: string,
 	cwd: string,
@@ -66,30 +65,6 @@ export const realSpawner: Spawner = (argv, cwd) => {
 	return { status: r.error ? null : r.status, stdout: r.stdout ?? "" };
 };
 
-function herdrPaneId(stdout: string): string | null {
-	try {
-		const body = JSON.parse(stdout) as { result?: { pane?: { pane_id?: unknown } } };
-		const id = body.result?.pane?.pane_id;
-		return typeof id === "string" && id !== "" ? id : null;
-	} catch {
-		return null;
-	}
-}
-
-function launchHerdr(
-	spawn: Spawner,
-	editor: string,
-	file: string,
-	cwd: string,
-	focus: boolean,
-): boolean {
-	const argv = ["herdr", "pane", "split", "--current", "--direction", "right", "--cwd", cwd];
-	const split = spawn(focus ? [...argv, "--focus"] : argv, cwd);
-	const pane = split.status === 0 ? herdrPaneId(split.stdout) : null;
-	if (!pane) return false;
-	return spawn(["herdr", "pane", "run", pane, `${editor} ${shellQuote(file)}`], cwd).status === 0;
-}
-
 export interface SplitLaunch {
 	mux: Multiplexer | null;
 	ok: boolean;
@@ -112,9 +87,6 @@ export function launchInSplit(
 	const mux = detectMultiplexer(env);
 	if (!mux) return { mux, ok: false };
 	const focus = cmd.focus ?? true;
-	if (mux === "herdr") {
-		return { mux, ok: launchHerdr(spawn, cmd.command, cmd.file, cmd.cwd, focus) };
-	}
 	const argv = splitArgv(mux, cmd.command, cmd.file, cmd.cwd, focus);
 	return { mux, ok: spawn(argv, cmd.cwd).status === 0 };
 }

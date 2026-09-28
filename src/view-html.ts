@@ -161,6 +161,19 @@ function proseHtml(text: string): string {
 		.join("\n");
 }
 
+function blocksHtml(i: ViewIdea): string {
+	return i.blocks
+		.map((b) => {
+			if (!b.question) return proseHtml(b.text);
+			const q = b.question;
+			const who = q.agent ? `[agent] ${q.by}` : q.by;
+			const cls = q.agent ? "q agent" : "q";
+			const label = `<p class="${cls}"><b>Q:</b> ${esc(q.text)} <span class="by">(<code>${esc(q.id)}</code> · ${esc(who)})</span></p>`;
+			return `${label}\n${proseHtml(b.text)}`;
+		})
+		.join("\n");
+}
+
 function eventLine(e: EventRecord): string {
 	const cls = isAgent(e.by) ? ' class="agent"' : "";
 	const who = isAgent(e.by) ? `[agent] ${String(e.by)}` : String(e.by ?? "?");
@@ -194,7 +207,7 @@ function nodeHtml(n: ViewNode, depth: number, tl: Timelines): string {
 		`<section class="idea" id="${esc(n.id)}" data-id="${esc(n.id)}">`,
 		`<h${h}>${esc(statementOf(n.statement))}</h${h}>`,
 		metaHtml(n),
-		proseHtml(n.body),
+		blocksHtml(n),
 		timelineHtml(tl(n.id)),
 		...n.children.map((c) => nodeHtml(c, depth + 1, tl)),
 		"</section>",
@@ -287,6 +300,7 @@ p{white-space:pre-wrap}
 .meta{color:var(--muted);font-size:.85rem;margin-top:-6px}
 .status{font-weight:600}
 .ref{color:var(--muted);font-style:italic}
+.q{color:var(--muted);border-left:3px solid var(--line);padding-left:10px;margin-bottom:4px}
 code{font-size:.85em}
 a{color:var(--accent)}
 .timeline{font-size:.85rem;color:var(--muted);margin:6px 0}

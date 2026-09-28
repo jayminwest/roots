@@ -7,6 +7,7 @@ import { colorEnabled, makeColors } from "../color.ts";
 import { GuardError } from "../errors.ts";
 import { requireHumanCommand, requireTty } from "../guard.ts";
 import type { Io } from "../io.ts";
+import { printNext } from "../next.ts";
 import type { Output } from "../output.ts";
 import type { CommandDef } from "../registry.ts";
 import { resolveNode } from "../resolve.ts";
@@ -18,7 +19,7 @@ import { decisionLines } from "./accept.ts";
 import { runAdoption } from "./adopt.ts";
 import { startThink, tallyLine } from "./think.ts";
 
-function thinkRunner(io: Io, by: Actor, split: boolean): ThinkRunner {
+export function thinkRunner(io: Io, by: Actor, split: boolean): ThinkRunner {
 	return async (id, guidance) => {
 		const ws = await openWorkspace(io.cwd);
 		const node = resolveNode(ws.graph.nodes, id, { kind: "idea" });
@@ -50,6 +51,13 @@ async function listCards(io: Io, out: Output): Promise<void> {
 	await out.result({ cards });
 	for (const c of cards) await out.line(cardLine(out, c));
 	if (cards.length === 0) await out.line("Nothing to tend.");
+}
+
+/** One line for a finished tend pass (flow shows it on its card). */
+export function tendLine(s: TendSummary): string {
+	if (s.cards === 0) return "nothing to tend";
+	const t = s.tally;
+	return `tended ${s.cards}: ${t.accepted} accepted, ${t.rejected} rejected, ${t.skipped} skipped`;
 }
 
 async function printSummary(out: Output, s: TendSummary): Promise<void> {
@@ -108,5 +116,6 @@ export const tendCommand: CommandDef = {
 			adopt: (id) => runAdoption(io, ws.paths, id, { by, split: !flagBool(flags, "no-split") }),
 		});
 		await printSummary(out, summary);
+		await printNext(out, ws.paths);
 	},
 };

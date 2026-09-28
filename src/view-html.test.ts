@@ -32,9 +32,9 @@ describe("layout", () => {
 		questions: [],
 		sprouts: [{ id: "s-1", slug: "sp", statement: "s", body: "", by: "agent:a", expiresAt: null }],
 		ideas: {
-			"r-a": { id: "r-a", slug: "a", status: "committed", statement: "A", body: "" },
-			"r-b": { id: "r-b", slug: "b", status: "shaping", statement: "B", body: "" },
-			"r-c": { id: "r-c", slug: "c", status: "planted", statement: "C", body: "" },
+			"r-a": { id: "r-a", slug: "a", status: "committed", statement: "A", body: "", blocks: [] },
+			"r-b": { id: "r-b", slug: "b", status: "shaping", statement: "B", body: "", blocks: [] },
+			"r-c": { id: "r-c", slug: "c", status: "planted", statement: "C", body: "", blocks: [] },
 		},
 		edges: [
 			{ from: "r-b", to: "r-a", rel: "serves" },

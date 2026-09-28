@@ -18,7 +18,7 @@ import { wrapText } from "./think-screen.ts";
 import type { Actor } from "./types.ts";
 
 export const CARD_MIN_WIDTH = 40;
-export const CARD_MAX_WIDTH = 80;
+export const CARD_MAX_WIDTH = 100;
 
 function sourceLabel(sources: readonly Actor[]): string {
 	return sources
@@ -132,7 +132,21 @@ export interface TendView {
 	expiredSprouts?: number;
 }
 
-export function renderTend(v: TendView, columns: number, c: Colors): string[] {
+/** Cut a body taller than `room` rows, ending with "… N more lines". */
+function clampBody(body: string[], room: number, c: Colors): string[] {
+	if (body.length <= room) return body;
+	const keep = Math.max(1, room - 1);
+	const more = body.length - keep;
+	return [...body.slice(0, keep), c.dim(`… ${more} more line${more === 1 ? "" : "s"}`)];
+}
+
+/**
+ * Draw the current card. With `rows` (terminal height), the card grows to
+ * fill it: blank rows go above the keys, so keys and status sit at the bottom.
+ * A body taller than the terminal is cut with "… N more lines" so the header
+ * never scrolls off-screen.
+ */
+export function renderTend(v: TendView, columns: number, c: Colors, rows = 0): string[] {
 	const width = Math.max(CARD_MIN_WIDTH, Math.min(CARD_MAX_WIDTH, columns));
 	const inner = width - 4;
 	const card = currentCard(v.state);
@@ -141,19 +155,25 @@ export function renderTend(v: TendView, columns: number, c: Colors): string[] {
 	const es = v.expiredSprouts ?? 0;
 	if (es > 0) top.push(c.dim(`${es} sprout${es === 1 ? "" : "s"} expired`));
 	if (!card) return top;
-	const body = [...cardBody(card, inner, c), "", ...keyLines(card, inner, c)];
-	const lines = [
+	let content = cardBody(card, inner, c);
+	const keys = ["", ...keyLines(card, inner, c)];
+	const s = v.state;
+	const footer: string[] = [];
+	if (s.reason !== null) footer.push(`reason: ${s.reason}█`, c.dim("[enter] reject  [esc] cancel"));
+	if (s.busy) footer.push(c.dim("working…"));
+	if (s.error) footer.push(c.red(`! ${s.error}`));
+	else if (s.notice) footer.push(c.green(`✓ ${s.notice}`));
+	footer.push(c.dim("[q] quit"));
+	const fixed = top.length + 1 + 2 + keys.length + footer.length;
+	if (rows > 0) content = clampBody(content, rows - fixed, c);
+	const used = fixed + content.length;
+	const filler = Array.from({ length: Math.max(0, rows - used) }, () => "");
+	return [
 		...top,
 		"",
 		header(card, v.now, width, c),
-		...body.map((l) => boxLine(l, inner)),
+		...[...content, ...filler, ...keys].map((l) => boxLine(l, inner)),
 		c.dim(`└${"─".repeat(width - 2)}┘`),
+		...footer,
 	];
-	const s = v.state;
-	if (s.reason !== null) lines.push(`reason: ${s.reason}█`, c.dim("[enter] reject  [esc] cancel"));
-	if (s.busy) lines.push(c.dim("working…"));
-	if (s.error) lines.push(c.red(`! ${s.error}`));
-	else if (s.notice) lines.push(c.green(`✓ ${s.notice}`));
-	lines.push(c.dim("[q] quit"));
-	return lines;
 }

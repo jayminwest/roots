@@ -24,6 +24,39 @@ const VIEW: ScreenView = {
 };
 
 describe("think screen", () => {
+	test("fills the terminal height with keys at the bottom", () => {
+		const lines = renderScreen(VIEW, 60, plain, 30);
+		expect(lines).toHaveLength(30);
+		const bottom = lines.findIndex((l) => l.startsWith("└"));
+		expect(lines[bottom - 1]).toContain("[q] end session");
+	});
+
+	test("findings under a delegated question; [a] when agents may work", () => {
+		const view: ScreenView = {
+			...VIEW,
+			canDelegate: true,
+			question: {
+				...(VIEW.question as NonNullable<ScreenView["question"]>),
+				findings: { text: "Postgres raises unless ON CONFLICT is given.", path: "n/f.md" },
+			},
+		};
+		const text = renderScreen(view, 60, plain).join("\n");
+		expect(text).toContain("── findings ── [agent]");
+		expect(text).toContain("Postgres raises unless ON CONFLICT is given.");
+		expect(text).toContain("full: n/f.md");
+		expect(text).toContain("[a] ask agent");
+		expect(renderScreen(VIEW, 60, plain).join("\n")).not.toContain("[a]");
+	});
+
+	test("a short terminal folds links instead of scrolling the title off", () => {
+		const full = renderScreen(VIEW, 60, plain).length;
+		const short = renderScreen(VIEW, 60, plain, full - 1);
+		expect(short).toHaveLength(full - 1);
+		expect(short[0]).toContain("roots think offline-sync");
+		expect(short.join("\n")).toContain("2 links (terminal too short)");
+		expect(short.join("\n")).toContain("[q] end session");
+	});
+
 	test("matches the SPEC mockup layout at 42 columns", () => {
 		const lines = renderScreen(VIEW, 42, plain);
 		expect(lines.join("\n")).toBe(

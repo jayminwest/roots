@@ -1,6 +1,8 @@
 // roots note <id> --file <path> [--name <n>] --as agent:<model> (agent,
 // tier ≥ 1): attach an artifact to a human idea. Copies it into
-// .roots/agent/notes/<hex>/YYYY-MM-DD-<slug>.<ext>. See src/notes.ts.
+// .roots/agent/notes/<hex>/YYYY-MM-DD-<slug>.<ext>. With --question, the
+// note is findings on a question the human delegated ([a] in think), and the
+// question comes back to the human. See src/notes.ts.
 
 import { resolveAgentActor } from "../actor.ts";
 import { flagString } from "../args.ts";
@@ -19,13 +21,21 @@ export const noteCommand: CommandDef = {
 		"Copies the file (research, a diagram, HTML, an image) to\n" +
 		".roots/agent/notes/<hex>/YYYY-MM-DD-<name>.<ext>. The human's idea.md is never\n" +
 		`touched. Limit: ${NOTE_MAX_BYTES / 1024 / 1024} MiB per file. Refused below tier 1 (per-idea override, else\n` +
-		"config). `roots show` and `roots context` list an idea's notes.",
+		"config). `roots show` and `roots context` list an idea's notes.\n" +
+		"--question <q-id>: findings on a question the human handed to the agent ([a] in\n" +
+		"think). Text only (.md/.txt); its first paragraph is shown under the question when\n" +
+		"it comes back to the human, who still answers it in idea.md.",
 	flags: {
 		file: { type: "string", placeholder: "<path>", description: "The file to attach (required)" },
 		name: {
 			type: "string",
 			placeholder: "<name>",
 			description: "Name for the note (default: the file name)",
+		},
+		question: {
+			type: "string",
+			placeholder: "<q-id>",
+			description: "Findings for this delegated question (reopens it for the human)",
 		},
 		as: {
 			type: "string",
@@ -46,9 +56,11 @@ export const noteCommand: CommandDef = {
 			file,
 			cwd: io.cwd,
 			name: flagString(flags, "name"),
+			question: flagString(flags, "question"),
 			by,
 		});
-		await out.result({ id: node.id, note: r.note });
-		await out.success(`noted ${out.c.id(node.id)} ${node.slug}: ${r.note.path}`);
+		await out.result({ id: node.id, note: r.note, question: r.question ?? null });
+		const q = r.question ? ` (findings for ${out.c.id(r.question)}, back with the human)` : "";
+		await out.success(`noted ${out.c.id(node.id)} ${node.slug}: ${r.note.path}${q}`);
 	},
 };

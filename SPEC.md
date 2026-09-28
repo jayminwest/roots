@@ -43,6 +43,7 @@ Roots makes intent cheap to add (one line, one question, a few minutes) and keep
   proposals.jsonl        # pending agent proposals (CLI-owned, capped)
   questions.jsonl        # asked questions + status (CLI-owned)
   events.jsonl           # append-only log of every mutation
+  headings.jsonl         # agent headings for `roots flow` (CLI-owned, advisory)
   human/
     a1b2-offline-sync/
       idea.md            # human prose only
@@ -215,12 +216,13 @@ Both kinds of proposal must cite the mentioning line as the source quote. That c
 ```
 
 - `by: roots:<rule>` means a deterministic rule asked it. `by: agent:<model>` means an agent asked it.
-- States: `open → answered | dismissed | snoozed`.
-- Answers are **not** stored here. The answer is whatever the human wrote in `idea.md` during that question's session. `events.jsonl` records the diff span.
+- States: `open → answered | dismissed | snoozed | delegated`, and `delegated → open` when findings arrive or the research run ends without them. See [Delegating a question](#delegating-a-question).
+- `findings: [{note, by, at}]` lists the agent's research notes on a delegated question, newest last.
+- Answers are **not** stored here. The answer is whatever the human wrote in `idea.md` during that question's session. The `answer` event in `events.jsonl` records the diff span and `lines`: a 12-hex hash (sha256, whitespace-trimmed) of each non-blank line the save added. Hashes, not text, so human prose is never cached in JSONL. `roots blame` uses them to show which question each line answered.
 
 ### events.jsonl
 
-An append-only audit log, one line per mutation: `plant`, `session.start`, `session.end` (with the content hash), `ask`, `answer`, `dismiss`, `propose`, `accept`, `reject`, `expire`, `sprout`, `adopt`, `mv`, `status`, `compost`. Every event has `by`. This is the traceable history of how intent evolved, and it is independent of git history (git remains the backup).
+An append-only audit log, one line per mutation: `plant`, `session.start`, `session.end` (with the content hash), `ask`, `answer`, `dismiss`, `snooze`, `delegate`, `undelegate`, `note`, `propose`, `accept`, `reject`, `expire`, `sprout`, `adopt`, `mv`, `status`, `compost`, `flow.start`, `flow.end`, `heading`, `heading.dismiss`. Every event has `by`. This is the traceable history of how intent evolved, and it is independent of git history (git remains the backup).
 
 ### config.yaml
 
@@ -238,6 +240,8 @@ limits:
   sproutTtlDays: 30
 view:
   write: false             # true → `roots view` also writes ROOTS.md at repo root
+flow:
+  heading: true            # `roots flow`: the agent says where the session is going
 ```
 
 ## Idea Lifecycle
@@ -297,7 +301,7 @@ The questions an agent should ask are specific to *this* idea ("What happens to 
 
 ## The `think` Loop (UX)
 
-Two panes. `roots think` runs in one. nvim runs in the other (or `roots think` launches `$EDITOR` in a split when running inside tmux, zellij or herdr).
+Two panes. `roots think` runs in one. nvim runs in the other (or `roots think` launches `$EDITOR` in a split when running inside tmux or zellij).
 
 ```
 ┌─ roots think offline-sync ─────────────┐┌─ nvim .roots/human/a1b2-offline-sync/idea.md ─┐
@@ -312,14 +316,99 @@ Two panes. `roots think` runs in one. nvim runs in the other (or `roots think` l
 │ record someone else deleted?           ││                                               │
 │                                        ││                                               │
 │ [save] answer  [d] dismiss  [z] snooze ││                                               │
-│ [s] skip       [q] end session         ││                                               │
+│ [s] skip       [a] ask agent           ││                                               │
+│ [q] end session                        ││                                               │
 └────────────────────────────────────────┘└───────────────────────────────────────────────┘
 ```
 
 - The watcher detects saves. A save that changes the file marks the current question `answered`, records the diff span, and moves to the next question.
 - Nothing is ever inserted into `idea.md`. Questions exist only in the pane.
 - The session ends after `questionsPerSession` questions or on `q`. The session end records the content hash (for `verify`).
+- `[a] ask agent` (tier ≥ 1) hands the current question to the agent. See [Delegating a question](#delegating-a-question).
 - At session end, roots scans the changed lines for mentions of other ideas and files proposals ([Mentions → proposals](#mentions--proposals)). At tier ≥ 2 the agent may also file proposals based on what changed. All of them go to `tend`, not to this session, so thinking and structuring stay separate.
+
+### Delegating a question
+
+Some questions are better researched than answered cold: "what does Postgres do on a conflicting upsert?", "which of our services already sync?". `[a]` hands the current question to the agent. The agent researches; the human still decides.
+
+1. `[a]` sets the question to `delegated` (a `delegate` event by the human) and moves on. Delegated questions are not asked again until they come back.
+2. After `session.end`, if `agent.command` is set, it runs with the idea's context packet and a "Delegated questions" section. `roots think` waits for it with a status line. `roots flow` runs it in the background, and the card shows it as running work. Without `agent.command`, delegated questions are listed in `roots context` for a harness to pick up.
+3. The agent attaches one Markdown or text note per question: `roots note <id> --question <q-id> --file findings.md`. The question must be delegated and belong to that idea. The same write sets it back to `open` with the note in `findings` (the `note` event carries `question`).
+4. A question the run leaves without findings goes back to `open` (an `undelegate` event by `roots` with the reason). It never stays stuck.
+5. Questions with findings come first in their idea's next session, and ideas with findings rank first in the queue ("agent findings ready"). Under the question the screen shows the note's first paragraph (headings skipped, at most 5 lines) and its path:
+
+```
+│ ── question 1/3 ── [missing-done] ─────│
+│ Which of our services already sync?    │
+│                                        │
+│ ── findings ── [agent] ────────────────│
+│ Three services sync today: api, worker │
+│ and mobile. Mobile queues writes in    │
+│ SQLite and replays them on reconnect.  │
+│ full: .roots/agent/notes/a1b2/2026-…md │
+```
+
+The human answers in `idea.md` as usual. Agreeing can take one line; `[d]` dismisses the question and `[a]` hands it back for another pass (earlier findings go into the next packet). Findings never enter `idea.md`, `view` or `prime`. They stay agent notes.
+
+## Flow: one session, no break points
+
+Single commands leave the human to work out what comes next ("I ran think, now what? Do I need an agent to look?"). `roots flow` removes those break points. It runs think sessions one after another and never drops to the shell between them.
+
+1. **Think.** The same loop as `roots think`, with one change: the agent never blocks. The session starts at once with rule questions, and agent questions arrive while the human writes.
+2. **Transition card.** When the questions run out, the session does not exit. It shows a card:
+
+```
+┌─ roots flow ── warren ── 23m ── inbox 3 ─────────────────────────────┐
+│ trail                                                                │
+│   r-c818 team-agent-platform    3 answered · 1 open  shaping         │
+│   r-7e52 no-long-lived-secret   1 answered · 2 open  shaping  ← last │
+│   + adopted r-0c3e, r-506b · accepted 2                              │
+│                                                                      │
+│ ── heading ── [agent] ─────────────────────────────── [x] dismiss ── │
+│ You're converging on "every action has a named principal" (r-c818)   │
+│ enforced by keeping credentials outside the sandbox (r-7e52). Still  │
+│ unsaid: whose limits bound an unattended run (q-c364).               │
+│                                                                      │
+│ … linking what changed in no-long-lived-secret                       │
+│ ✓ no-long-lived-secret done · 1 answered, 2 skipped                  │
+│                                                                      │
+│ [enter] review inbox (3)                                             │
+│ [n] next: r-c818 team-agent-platform · 1 open question ← heading     │
+│ [o] other idea (1 more)                                              │
+│ [p] plant   [x] dismiss heading   [q] end flow                       │
+└──────────────────────────────────────────────────────────────────────┘
+```
+
+- **Trail**: what this flow did, read back from `events.jsonl` (the human's events between `flow.start` and `flow.end`). It is deterministic and has no LLM.
+- **Heading** (tier ≥ 1, `agent.command` set, `flow.heading: true`): the agent's read on where the thinking is converging and what is still unsaid. See [Headings](#headings).
+- **Background work**: after each session, the proposal run (tier ≥ 2) and the heading run start in the background. The card refreshes as their results land.
+- **Inbox**: pending proposals and sprouts. `[enter]` reviews them first, inline, with the same cards as `tend`. An adopted sprout opens `$EDITOR` on an empty file, as in `adopt`.
+- **Next pick**: the heading's `--next` suggestion first, then ideas this flow has not touched (in `roots queue` order), then touched ideas with open questions. A just-planted idea comes first until it is thought about.
+
+Keys: `[enter]` does the recommended step (review the inbox, else think about the pick), `[n]` think about the pick, `[o]` other pick, `[p]` plant, `[x]` dismiss the heading, `[q]` end the flow. On exit, roots waits for agent runs that are still going, then prints the trail and a `next:` line.
+
+Under tmux with vi/vim/nvim, one editor pane follows the flow: later sessions switch it to the next `idea.md` with `:update | edit <file>` instead of opening a new split.
+
+Every human command (`think`, `tend`, `adopt`, `plant`, `accept`, `reject`, `flow`) ends with one dim `next:` line: `roots tend` when cards wait, else `roots think <id>` for the idea most in need, else `roots plant`.
+
+### Headings
+
+A heading is advisory agent text, labeled `[agent]` and shown only on the flow card. It is never shown in `view`, `prime`, or any human file. It is held to the same rules as proposals:
+
+- The agent files it with `roots heading <text> --cite <id>:<quote> ... [--next <id>]`, only during a live flow (`$ROOTS_FLOW`).
+- It is at most 2 sentences and 280 characters.
+- It has at least one citation. Every quote must be an exact substring of a live idea, and every `r-` id in the text must be cited. Every `q-` id must exist.
+- The tier must be ≥ 1 for the project and for every cited idea.
+- A heading with the same text as a dismissed heading is refused. Dismissed headings go into the next heading run's packet.
+- The newest active heading of a flow is the one shown. `[x]` dismisses it (`heading.dismiss` event).
+
+The heading run's packet contains the trail, the full prose of the ideas touched in this flow, the statements of the other ideas, the open questions, the accepted links, the current heading, and the dismissed headings. Ideas with a per-idea tier 0 are left out of the packet.
+
+`headings.jsonl`:
+
+```json
+{"id":"h-3c1d","flow":"fl-9a02","text":"Converging on r-c818 enforced by r-7e52; unsaid: q-c364.","cites":[{"node":"r-c818","quote":"every action has a named principal"},{"node":"r-7e52","quote":"No long-lived secret"}],"next":"r-c818","by":"agent:claude-opus-5-5","status":"active","createdAt":"2026-09-28T22:21:30Z"}
+```
 
 ## CLI
 
@@ -331,6 +420,7 @@ Binary name: `roots`. Every command supports `--json`. Commands marked **(human)
 roots init                               Initialize .roots/
 roots plant [<statement>]                Create an idea. With no argument, opens $EDITOR
 roots think [<id>]                       Run a think session. With no id, picks from the queue
+roots flow [<id>]                        Think, review and plant in one session (see Flow)
 roots adopt <sprout-id>                  Create a new idea from a sprout (human rewrites; see above)
 roots mv <id> <new-slug>                 Rename (ID is stable)
 ```
@@ -371,9 +461,11 @@ roots context <id>                       Context packet for one idea (prose, nei
 roots prime [--scope <id>]               Accepted graph as agent context (anchors → committed ideas)
 roots ask <id> <question>                Queue a question                          tier ≥ 1
 roots note <id> --file <path>            Attach an artifact under agent/notes/<id>/ tier ≥ 1
+  [--question <q-id>]                    ... as findings on a delegated question (.md/.txt)
 roots propose edge <a> <b> <rel> --reason <t> --cite <id>:<quote> ...          tier ≥ 2
 roots propose split|merge|compost ...                                          tier ≥ 2
 roots sprout <statement> [--file <md>]   Propose a new idea (agent tree)           tier ≥ 2
+roots heading <text> --cite <id>:<quote> ... [--next <id>]   Flow heading       tier ≥ 1
 ```
 
 ### Read (anyone)
@@ -383,6 +475,7 @@ roots show <id>                          Idea/sprout with edges, questions, hist
 roots list [--status <s>] [--kind idea|sprout] [--orphans] [--anchors]
 roots queue                              What needs attention: open questions, pending proposals
 roots view [--from <id>] [--sprouts] [--html]   Compiled culmination
+roots blame <id>                         idea.md with the question each line answered
 roots log [<id>]                         Event history
 roots verify                             Check the human/agent boundary + graph invariants
 ```
@@ -405,6 +498,8 @@ Same shape as seeds:
 3. An idea that serves more than one anchor is printed in full once. Later occurrences are back-references.
 4. After the tree: **Tensions** (all unresolved `tension` pairs) and **Open questions**.
 5. `composted` ideas and all sprouts are excluded. `--sprouts` appends a separate section labeled **Agent proposals (not accepted)**.
+
+A paragraph that answered a think question is preceded by that question as a quoted `**Q:**` line with its id and asker (the attribution `roots blame` uses). The question is labeled, not mixed into the prose: an agent's question renders `[agent]`.
 
 It contains only human prose and human-accepted structure. The output goes to stdout by default. `--html` renders a static page with a graph visual and a timeline per idea from `events.jsonl`. With `view.write: true` it also writes `ROOTS.md` at the repo root, so PR diffs show how intent changed.
 
@@ -475,7 +570,6 @@ Mulch records may cite `r-` IDs. `roots show` lists mulch learnings attached to 
 
 ## Open Questions
 
-- **Session granularity.** Should the diff span of each answer be linked to its question permanently, so the view can show "this paragraph answered q-5e10"? It is useful for traceability but adds bookkeeping.
 - **Assets.** Can agents attach HTML/PNG artifacts to human ideas only through `agent/notes/`, or should an idea's pane show them inline?
 - **Evolution vs edit.** When a human rewrites an idea's statement, is that the same idea, or should the tool offer `replaces`? The default is the same idea, and `events.jsonl` keeps the old statement hash.
 

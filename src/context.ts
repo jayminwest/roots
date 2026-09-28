@@ -52,6 +52,8 @@ export interface ContextQuestion {
 	by: Actor;
 	status: QuestionStatus;
 	createdAt: string;
+	/** Agent findings attached to it (note paths), oldest first. */
+	findings: string[];
 }
 
 export interface ContextRejection {
@@ -216,6 +218,7 @@ export function buildContext(
 			by: q.by,
 			status: q.status,
 			createdAt: q.createdAt,
+			findings: (q.findings ?? []).map((f) => f.note),
 		})),
 		rejectedProposals: rejections(readProposals(ws.paths), node.id),
 		notes: listNotes(ws.paths, node),
@@ -243,7 +246,19 @@ function neighborLine(n: ContextNeighbor): string {
 }
 
 function questionLine(q: ContextQuestion): string {
-	return `- [${q.status}] ${q.text} (${q.id}, ${q.by})`;
+	const found = q.findings.length > 0 ? `; findings: ${q.findings.join(", ")}` : "";
+	return `- [${q.status}] ${q.text} (${q.id}, ${q.by}${found})`;
+}
+
+/** Only when the human handed questions to the agent ([a] in think). */
+function delegatedLines(p: ContextPacket): string[] {
+	const qs = p.questions.filter((q) => q.status === "delegated");
+	if (qs.length === 0) return [];
+	return section(
+		`Delegated questions (research these; attach findings with \`roots note ${p.node.id} --question <q-id> --file <md>\`)`,
+		qs.map((q) => `- ${q.id}: ${q.text}`),
+		"",
+	);
 }
 
 function rejectionLine(r: ContextRejection): string {
@@ -332,6 +347,7 @@ export function renderContextMarkdown(p: ContextPacket): string {
 			p.questions.map(questionLine),
 			"(none yet)",
 		),
+		...delegatedLines(p),
 		...section(
 			"Rejected proposals (do not suggest these again)",
 			p.rejectedProposals.map(rejectionLine),

@@ -80,13 +80,15 @@ export const viewCommand: CommandDef = {
 		if (outFile && isHumanPath(ws.paths, outFile)) {
 			throw new GuardError(`refusing to write ${target}: it is inside .roots/human/`);
 		}
+		const events = readEvents(ws.paths);
 		const data = buildView(ws, config, questions, {
 			from: resolveFrom(ws, flagString(flags, "from")),
 			sprouts: flagBool(flags, "sprouts"),
+			events,
 		});
 		const text = render(ws, data, html);
 		const wrote = config.view.write
-			? await writeRootsMd(ws, renderViewMarkdown(buildView(ws, config, questions)))
+			? await writeRootsMd(ws, renderViewMarkdown(buildView(ws, config, questions, { events })))
 			: false;
 		if (outFile) await atomicWrite(outFile, text);
 		await out.result({

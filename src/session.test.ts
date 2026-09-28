@@ -4,6 +4,7 @@ import {
 	initialState,
 	parseKeys,
 	type SessionInput,
+	type SessionKey,
 	type SessionState,
 	step,
 	tally,
@@ -20,7 +21,7 @@ const q = (id: string): QuestionRecord => ({
 });
 const SPAN = { from: 2, to: 2, removed: 0 };
 const save: SessionInput = { type: "save", span: SPAN };
-const key = (k: "d" | "z" | "s" | "q"): SessionInput => ({ type: "key", key: k });
+const key = (k: SessionKey): SessionInput => ({ type: "key", key: k });
 
 function run(state: SessionState, inputs: SessionInput[]) {
 	const effects = [];
@@ -47,7 +48,14 @@ describe("session reducer", () => {
 		const { s, effects } = run(initialState([q("q-1"), q("q-2"), q("q-3")]), [key("s"), key("z")]);
 		expect(effects.map((e) => e.type)).toEqual(["snooze"]);
 		expect(currentQuestion(s)?.id).toBe("q-3");
-		expect(tally(s)).toEqual({ answered: 0, dismissed: 0, snoozed: 1, skipped: 1, unasked: 1 });
+		expect(tally(s)).toEqual({
+			answered: 0,
+			dismissed: 0,
+			snoozed: 1,
+			skipped: 1,
+			delegated: 0,
+			unasked: 1,
+		});
 	});
 
 	test("q ends early; inputs after the end are ignored", () => {
@@ -74,6 +82,18 @@ describe("session reducer", () => {
 	test("parseKeys", () => {
 		expect(parseKeys("dZxs\x03q")).toEqual(["d", "z", "s", "q", "q"]);
 		expect(parseKeys("\x1b[A")).toEqual([]);
+		expect(parseKeys("\x1b[1;5Aa\x1bOA\x1ba")).toEqual(["a"]);
+	});
+
+	test("a hands the question to the agent, only when agents are allowed", () => {
+		const on = run(initialState([q("q-1"), q("q-2")], true), [key("a")]);
+		expect(on.effects).toEqual([{ type: "delegate", question: q("q-1") }]);
+		expect(on.s.notice).toMatch(/^handed to the agent/);
+		expect(tally(on.s).delegated).toBe(1);
+		const off = run(initialState([q("q-1")]), [key("a")]);
+		expect(off.effects).toEqual([]);
+		expect(currentQuestion(off.s)?.id).toBe("q-1");
+		expect(off.s.notice).toMatch(/tier 0/);
 	});
 });
 

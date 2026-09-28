@@ -3,9 +3,12 @@
 import { acceptCommand, rejectCommand } from "./commands/accept.ts";
 import { adoptCommand } from "./commands/adopt.ts";
 import { askCommand } from "./commands/ask.ts";
+import { blameCommand } from "./commands/blame.ts";
 import { contextCommand } from "./commands/context.ts";
 import { driftCommand } from "./commands/drift.ts";
+import { flowCommand } from "./commands/flow.ts";
 import { guardCommand } from "./commands/guard.ts";
+import { headingCommand } from "./commands/heading.ts";
 import { initCommand } from "./commands/init.ts";
 import { commitCommand, compostCommand, statusCommand } from "./commands/lifecycle.ts";
 import { linkCommand, unlinkCommand } from "./commands/link.ts";
@@ -35,6 +38,7 @@ export const COMMANDS: readonly CommandDef[] = [
 	guardCommand,
 	plantCommand,
 	thinkCommand,
+	flowCommand,
 	adoptCommand,
 	mvCommand,
 	tendCommand,
@@ -54,7 +58,9 @@ export const COMMANDS: readonly CommandDef[] = [
 	noteCommand,
 	proposeCommand,
 	sproutCommand,
+	headingCommand,
 	showCommand,
+	blameCommand,
 	listCommand,
 	queueCommand,
 	logCommand,

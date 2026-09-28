@@ -25,7 +25,7 @@
 		"lint": "biome check --error-on-warnings .",
 		"lint:fix": "biome check --write --error-on-warnings .",
 		"typecheck": "tsc --noEmit",
-		"check:agents": "bun run scripts/validate-agents-md.ts --known-missing idea.md --known-missing .mulch/archive",
+		"check:agents": "bun run scripts/validate-agents-md.ts --known-missing idea.md --known-missing .mulch/archive --known-missing .roots --known-missing .roots/human",
 		"check:dups": "bunx jscpd",
 		"check:deps": "knip --dependencies",
 		"check:size": "bun run scripts/check-file-sizes.ts --budget scripts/file-size-budgets.json",

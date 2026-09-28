@@ -50,13 +50,15 @@ src/*.ts            store, ids, config, output, graph, etc.
   actor.ts guard.ts human/agent actors, TTY guard
   test-helpers.ts   run()/runJson() in-process, spawnCli(), fakeTerminal(), waitFor()
   rules.ts          deterministic question rules (pure); thresholds in config `questions:`
-  questions.ts      questions.jsonl: add/answer/dismiss/snooze (one event each)
+  questions.ts      questions.jsonl: add/answer/dismiss/snooze/delegate/undelegate (one event each)
+  delegation.ts     [a] in think: research run after the session; findingPreview() for the screen
   proposals.ts      proposals.jsonl: fileProposals() = expire+cite+reject+dedup+cap checks;
                     overdue or moot (endpoint composted/gone/closed sprout) pending ones expire
   mentions.ts       mention detection (pure); mention-scan.ts turns them into proposals
   attention.ts      "what needs thinking" ranking (think with no id, queue)
   session.ts        think session state machine (pure reducer)
   think-session.ts  session shell: watcher + keys + effects + finalize
+  think-agent.ts    think's agent helpers: phase notice, summaries, proposal run; background mode (flow)
   think-screen.ts   left-pane TUI renderer (pure); terminal.ts raw mode; watch.ts; split.ts
   tier.ts           effectiveTier() (per-idea override, else config) + requireTier() guard
   context.ts        buildContext() packet + renderContextMarkdown() (roots context, agent stdin)
@@ -65,6 +67,11 @@ src/*.ts            store, ids, config, output, graph, etc.
   agent-phase.ts    think's pre-session agent step (off | harness | full | command)
   prime.ts          buildPrime()/renderPrimeMarkdown(): accepted graph + agent guide
   spinner.ts        startStatus(): one-line status while waiting on the agent
+  next.ts           nextStep()/printNext(): the `next:` hint after human commands
+  flow.ts           flow trail + card reducer (pure); flow-render.ts draws the card; flow-session.ts is the shell
+  headings.ts       fileHeading() (tier, live flow, 2 sentences/280 chars, cites, dismissed) + dismissHeading()
+  heading-run.ts    heading packet + runHeadingPhase(): agent.command with ROOTS_FLOW after each flow session
+  editor-pane.ts    showInEditorPane(): reuse one tmux vim pane across flow sessions (`:update | edit`)
   graph-rules.ts    edge invariants (pure): checkEdge() for writes, graphViolations() for verify
   edges.ts          addEdge()/removeEdge() under the graph lock (replaces composts the target)
   lifecycle.ts      idea status transitions (transitionError, setIdeaStatus, statusEvent)
@@ -84,6 +91,8 @@ src/*.ts            store, ids, config, output, graph, etc.
   git-trust.ts      gitProbe() + isAgentCommit() for the hash ledger
   hook-guard.ts     `roots guard` decisions (paths, symlinks, best-effort Bash)
   claude-settings.ts `setup claude` hook merge; desiredHooks() adds Stop/drift at tier 3 when `drift` exists
+  blame.ts          lineHash() for answer events; buildBlame() lines → question (hashes, else
+                    spanLines() replay when idea.md is unchanged since session end); answerBlocks() for view
   idea-refs.ts      citedIdeaIds(): exact `r-xxxx` tokens in free text (seeds, mulch, commits)
   seeds-link.ts     read-only .seeds/issues.jsonl: linkedIssues() (intent field, else r- mention), readyToMarkBuilt()
   mulch-link.ts     read-only .mulch/expertise/*.jsonl: learningsFor() (records citing an r- id)
@@ -93,7 +102,7 @@ src/*.ts            store, ids, config, output, graph, etc.
 
 ## Invariants (do not break)
 
-1. **Human/agent separation.** No agent command (`ask`, `note`, `propose`, `sprout`, `context`, `prime`) writes under `.roots/human/`. Human commands (`plant`, `think`, `adopt`) require a TTY.
+1. **Human/agent separation.** No agent command (`ask`, `note`, `propose`, `sprout`, `heading`, `context`, `prime`) writes under `.roots/human/`. Human commands (`plant`, `think`, `flow`, `adopt`, `tend`) require a TTY.
 2. **No LLM in the CLI.** An agent runs only through the user-configured `agent.command`.
 3. **Human prose is untouched.** Roots never writes frontmatter, IDs or markers into `idea.md`. The statement is read from the file and is never cached in JSONL.
 4. **Every agent write is validated.** Check tier, caps, TTL, exact-substring citations and permanent rejections, then fail with a clear error.

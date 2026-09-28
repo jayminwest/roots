@@ -2,7 +2,10 @@
 //
 // Answers are never stored here: the answer is what the human wrote in
 // idea.md; the `answer` event records the diff span. Each mutation logs
-// exactly one event: `ask` (new question), `answer`, `dismiss`, `snooze`.
+// exactly one event: `ask` (new question), `answer`, `dismiss`, `snooze`,
+// `delegate` (the human hands it to the agent), `undelegate` (the agent run
+// ended without findings; roots puts it back). Findings arrive with the
+// agent's `note` event (notes.ts).
 
 import { isHumanActor } from "./actor.ts";
 import type { RootsConfig } from "./config.ts";
@@ -27,7 +30,11 @@ export function isDue(q: QuestionRecord, now: Date): boolean {
 	return q.snoozedUntil === undefined || Date.parse(q.snoozedUntil) <= now.getTime();
 }
 
-/** Due questions for one node, oldest first. */
+export function hasFindings(q: Pick<QuestionRecord, "findings">): boolean {
+	return (q.findings?.length ?? 0) > 0;
+}
+
+/** Due questions for one node: those with agent findings first, then oldest first. */
 export function dueQuestions(
 	rows: readonly QuestionRecord[],
 	node: string,
@@ -35,7 +42,15 @@ export function dueQuestions(
 ): QuestionRecord[] {
 	return rows
 		.filter((q) => q.node === node && isDue(q, now))
-		.sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+		.sort(
+			(a, b) =>
+				Number(hasFindings(b)) - Number(hasFindings(a)) || a.createdAt.localeCompare(b.createdAt),
+		);
+}
+
+/** Questions handed to the agent and still waiting for findings. */
+export function delegatedQuestions(rows: readonly QuestionRecord[], node?: string) {
+	return rows.filter((q) => q.status === "delegated" && (node === undefined || q.node === node));
 }
 
 export interface NodeActivity {
@@ -191,9 +206,10 @@ async function closeQuestion(
 export function answerQuestion(
 	paths: RootsPaths,
 	id: string,
-	act: QuestionAct & { span: DiffSpan },
+	act: QuestionAct & { span: DiffSpan; lines?: string[] },
 ): Promise<QuestionRecord> {
-	return closeQuestion(paths, id, act, "answer", { span: act.span });
+	const extra = act.lines ? { span: act.span, lines: act.lines } : { span: act.span };
+	return closeQuestion(paths, id, act, "answer", extra);
 }
 
 export function dismissQuestion(
@@ -228,5 +244,52 @@ export async function snoozeQuestion(
 			until,
 		}),
 	);
+	return q;
+}
+
+/** [a] in think: hand the question to the agent for research (one `delegate` event). */
+export async function delegateQuestion(
+	paths: RootsPaths,
+	id: string,
+	act: QuestionAct,
+): Promise<QuestionRecord> {
+	const at = isoNow(act.at);
+	const q = await patchQuestion(paths, id, (r) => {
+		r.status = "delegated";
+		r.delegatedBy = act.by;
+		r.delegatedAt = at;
+		r.session = act.session;
+		delete r.snoozedUntil;
+	});
+	await appendEvent(
+		paths,
+		makeEvent("delegate", act.by, { at, node: q.node, question: id, session: act.session }),
+	);
+	return q;
+}
+
+/**
+ * The agent run ended without findings: the question goes back to the human
+ * (one `undelegate` event by `roots`). No-op when it is no longer delegated.
+ */
+export async function undelegateQuestion(
+	paths: RootsPaths,
+	id: string,
+	reason: string,
+	now?: Date,
+): Promise<QuestionRecord | null> {
+	const at = isoNow(now);
+	const q = await updateTable<QuestionRecord, QuestionRecord | null>(paths.questions, (rows) => {
+		const row = rows.find((r) => r.id === id);
+		if (row?.status !== "delegated") return { rows, write: false, result: null };
+		row.status = "open";
+		return { rows, write: true, result: row };
+	});
+	if (q) {
+		await appendEvent(
+			paths,
+			makeEvent("undelegate", "roots", { at, node: q.node, question: id, reason }),
+		);
+	}
 	return q;
 }

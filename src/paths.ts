@@ -17,6 +17,7 @@ export interface RootsPaths {
 	proposals: string;
 	questions: string;
 	events: string;
+	headings: string;
 	gitignore: string;
 	human: string;
 	agent: string;
@@ -35,6 +36,7 @@ export function rootsPaths(projectRoot: string): RootsPaths {
 		proposals: join(dir, "proposals.jsonl"),
 		questions: join(dir, "questions.jsonl"),
 		events: join(dir, "events.jsonl"),
+		headings: join(dir, "headings.jsonl"),
 		gitignore: join(dir, ".gitignore"),
 		human: join(dir, "human"),
 		agent: join(dir, "agent"),

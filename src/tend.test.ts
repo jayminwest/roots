@@ -138,6 +138,28 @@ describe("tend reducer", () => {
 });
 
 describe("renderTend", () => {
+	test("fills the terminal height with [q] quit on the last row", () => {
+		const lines = renderTend(
+			{ state: state([prop({})]), now: NOW, expired: 0 },
+			70,
+			makeColors(false),
+			40,
+		);
+		expect(lines).toHaveLength(40);
+		expect(lines.at(-1)).toBe("[q] quit");
+		expect(lines.at(-2)?.startsWith("└")).toBe(true);
+		const short = renderTend(
+			{ state: state([prop({})]), now: NOW, expired: 0 },
+			70,
+			makeColors(false),
+			10,
+		);
+		expect(short).toHaveLength(10);
+		expect(short[0]).toContain("roots tend");
+		expect(short.join("\n")).toMatch(/… \d+ more lines?/);
+		expect(short.at(-1)).toBe("[q] quit");
+	});
+
 	test("the SPEC card mockup", () => {
 		const s = state([prop({})]);
 		const text = renderTend({ state: s, now: NOW, expired: 2 }, 70, makeColors(false)).join("\n");

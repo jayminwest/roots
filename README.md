@@ -41,7 +41,7 @@ roots --version
 ## Quick Start
 
 A walkthrough of the core loop: **plant → think → tend → view**. Human commands (`plant`,
-`think`, `adopt`, `tend`) need an interactive terminal, and every human command needs a name
+`think`, `flow`, `adopt`, `tend`) need an interactive terminal, and every human command needs a name
 (`ROOTS_USER`, else `git config user.name`).
 
 ```bash
@@ -57,7 +57,7 @@ roots mv sync-works-fully-offline offline-sync     # slugs are yours; the id nev
 
 # 2. Think: one question at a time about one idea
 roots queue                    # what needs thinking, open questions, pending proposals
-roots think offline-sync       # opens idea.md in $EDITOR (a split inside tmux/zellij/herdr)
+roots think offline-sync       # opens idea.md in $EDITOR (a split inside tmux/zellij)
 ```
 
 In a think session, the left pane shows the idea, its edges and the current question. Write in
@@ -65,6 +65,11 @@ In a think session, the left pane shows the idea, its edges and the current ques
 ever inserted into your file. Keys: `[d]` dismiss (never ask again), `[z]` snooze, `[s]` skip,
 `[q]` end. Questions come from deterministic rules ("What would make this done?", "What is this
 *not* trying to solve?", "Is this one idea or two?") and, at tier ≥ 1, from your agent.
+
+Would rather have the agent look something up? `[a]` hands the question to the agent. After the
+session it researches the question and attaches findings (`roots note --question`). The question
+comes back next time with the findings' first paragraph under it. You still answer in `idea.md`:
+the agent informs, you decide. A question the agent could not answer comes back as it was.
 
 ```bash
 # 3. Tend: review what agents and mention detection proposed, one keystroke per card
@@ -83,6 +88,20 @@ roots commit field-teams-trust-app                     # after it has been shape
 roots view                     # Markdown to stdout: anchors, what serves them, tensions, questions
 roots view --html --out intent.html
 ```
+
+Or do all of it in one sitting:
+
+```bash
+roots flow                     # think → card → next idea, without dropping to the shell
+```
+
+Between sessions `flow` shows a card with the trail (what you touched this flow), an `[agent]`
+heading on where your thinking is going (cited, dismissable with `[x]`, never shown in views),
+agent work still running, the inbox, and the next idea. `[enter]` does the obvious next step.
+Agent questions arrive while you write; links and the heading are worked out in the background.
+Under tmux with vim/nvim, one editor pane follows you from idea to idea.
+
+Every human command ends with a `next:` line naming the step that is most worth doing.
 
 Commit `.roots/` with your code. Roots never runs git for you.
 
@@ -123,6 +142,7 @@ error}`), `-h`/`--help` and `-q`/`--quiet`. `roots --version` prints the version
 |---------|-------------|
 | `roots plant [<statement>]` | Create an idea. With no argument, opens `$EDITOR` |
 | `roots think [<id>] [--no-split]` | Run a think session. With no id, picks from the queue |
+| `roots flow [<id>] [--no-split]` | Think, review and plant in one session; the agent works in the background |
 | `roots adopt <sprout-id>` | Create an idea from a sprout: you write it in `$EDITOR`; a `derives` edge keeps the lineage |
 | `roots mv <id> <new-slug>` | Rename an idea or sprout (the id is stable) |
 
@@ -152,10 +172,11 @@ Agents identify with `--as agent:<model>` or `ROOTS_AGENT`. These commands never
 | `roots prime [--scope <id>]` | any | Accepted graph as agent context (anchors → committed ideas) plus a command guide |
 | `roots drift [--diff <rev>]` | 3 | Ideas a repo change touches (the Stop hook; never blocks) |
 | `roots ask <id> <question>` | ≥ 1 | Queue a question about an idea |
-| `roots note <id> --file <path>` | ≥ 1 | Attach an artifact under `.roots/agent/notes/` |
+| `roots note <id> --file <path> [--question <q-id>]` | ≥ 1 | Attach an artifact under `.roots/agent/notes/`; with `--question`, findings on a question you delegated with `[a]` |
 | `roots propose edge <a> <b> <rel> --reason <t> --cite <id>:<quote> ...` | ≥ 2 | Propose an edge; quotes must be exact substrings of each idea |
 | `roots propose split\|merge\|compost ...` | ≥ 2 | Propose restructuring an idea |
 | `roots sprout <statement> [--file <md>]` | ≥ 2 | Propose a new idea in the agent tree |
+| `roots heading <text> --cite <id>:<quote> ... [--next <id>]` | ≥ 1 | During `roots flow` (`$ROOTS_FLOW`): where the session is going; ≤ 2 sentences, 280 chars |
 
 ### Read (anyone)
 
@@ -164,8 +185,9 @@ Agents identify with `--as agent:<model>` or `ROOTS_AGENT`. These commands never
 | `roots show <id>` | An idea or sprout with edges, questions, proposals, seeds issues, mulch learnings, history |
 | `roots list [--status <s>] [--kind idea\|sprout] [--orphans] [--anchors]` | List ideas and sprouts |
 | `roots queue` | What needs attention: think next, open questions, pending proposals, sprouts, ideas ready to mark `built` |
+| `roots blame <id>` | `idea.md` with the id of the question each line answered in the margin (matched by line content, so later edits elsewhere do not break it) |
 | `roots log [<id>]` | Event history (all, or for one node) |
-| `roots view [--from <id>] [--sprouts] [--html] [--out <file>]` | Compiled culmination; only human prose and accepted structure |
+| `roots view [--from <id>] [--sprouts] [--html] [--out <file>]` | Compiled culmination; only human prose and accepted structure. Answered paragraphs are labeled with their question |
 | `roots verify` | Check the human/agent boundary, graph invariants and the hash ledger |
 
 ## Agent Tiers
@@ -200,11 +222,14 @@ limits:
   sproutTtlDays: 30
 view:
   write: false             # true: `roots view` also writes ROOTS.md
+flow:
+  heading: true            # `roots flow`: the agent says where the session is going
 ```
 
 With `agent.command` set, `roots think` runs it (through `sh`) with the idea's context packet on
 stdin before the session and shows the questions it files with `roots ask`. Without it, a harness
-already running in another pane can call `roots ask` itself.
+already running in another pane can call `roots ask` itself. In `roots flow` the same command
+runs in the background, and again after each session with `ROOTS_FLOW` set to file a heading.
 
 ## Claude Code Setup
 
@@ -242,6 +267,7 @@ Roots only reads `.seeds/` and `.mulch/`.
   proposals.jsonl    # agent proposals (capped, expiring)
   questions.jsonl
   events.jsonl       # append-only log of every mutation, each with `by`
+  headings.jsonl     # agent headings for `roots flow` (advisory, card only)
   human/<hex>-<slug>/idea.md       # your prose, nothing else
   agent/sprouts/<hex>-<slug>/sprout.md
   agent/notes/<hex>/...

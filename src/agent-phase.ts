@@ -55,7 +55,7 @@ export interface AgentPhaseInput {
 	timeoutMs?: number;
 }
 
-function askedIn(paths: RootsPaths, node: string, session: string): number {
+export function askedIn(paths: RootsPaths, node: string, session: string): number {
 	return readQuestions(paths).filter(
 		(q) => q.node === node && q.session === session && q.by.startsWith("agent:"),
 	).length;
@@ -65,30 +65,72 @@ export function agentsAllowed(config: RootsConfig, node: NodeRecord): boolean {
 	return effectiveTier(config, node).tier >= 1;
 }
 
-export async function runAgentPhase(input: AgentPhaseInput): Promise<AgentPhase> {
+interface AgentPlan {
+	tier: EffectiveTier;
+	mode: AgentMode;
+	actor: Actor | null;
+	/** Set only in "command" mode: what to send agent.command. */
+	run: (() => Promise<AgentRunResult>) | null;
+}
+
+function planAgentPhase(input: AgentPhaseInput): AgentPlan {
 	const { paths, config, node, session } = input;
 	const tier = effectiveTier(config, node);
 	const command = config.agent.command;
-	const base = { tier, run: null, asked: 0 };
-	if (tier.tier < 1) return { ...base, mode: "off", actor: null };
-	if (!command) return { ...base, mode: "harness", actor: null };
+	if (tier.tier < 1) return { tier, mode: "off", actor: null, run: null };
+	if (!command) return { tier, mode: "harness", actor: null, run: null };
 	const actor = agentActorFor(command);
 	const ws = { paths, graph: input.graph, dirs: scanNodeDirs(paths) };
 	const packet = buildContext(ws, config, node, { session });
-	if (packet.limits.asksRemaining === 0) return { ...base, mode: "full", actor };
-	const status = input.status?.(`asking ${actor} for questions about ${node.slug}…`);
-	const run = await runAgentCommand({
-		command,
-		cwd: paths.root,
-		input: agentPrompt(packet, { actor, asks: packet.limits.asksRemaining }),
-		env: agentEnv(input.env, { actor, session, node: node.id }),
-		timeoutMs: input.timeoutMs ?? config.agent.timeoutSeconds * 1000,
-	});
-	const asked = askedIn(paths, node.id, session);
+	if (packet.limits.asksRemaining === 0) return { tier, mode: "full", actor, run: null };
+	const run = () =>
+		runAgentCommand({
+			command,
+			cwd: paths.root,
+			input: agentPrompt(packet, { actor, asks: packet.limits.asksRemaining }),
+			env: agentEnv(input.env, { actor, session, node: node.id }),
+			timeoutMs: input.timeoutMs ?? config.agent.timeoutSeconds * 1000,
+		});
+	return { tier, mode: "command", actor, run };
+}
+
+export async function runAgentPhase(input: AgentPhaseInput): Promise<AgentPhase> {
+	const plan = planAgentPhase(input);
+	const base = { tier: plan.tier, mode: plan.mode, actor: plan.actor, run: null, asked: 0 };
+	if (!plan.run) return base;
+	const status = input.status?.(`asking ${plan.actor} for questions about ${input.node.slug}…`);
+	const run = await plan.run();
+	const asked = askedIn(input.paths, input.node.id, input.session);
 	status?.stop(
 		run.status === "ok" ? undefined : `! agent.command ${run.error}; continuing without it`,
 	);
-	return { ...base, mode: "command", actor, run, asked };
+	return { ...base, run, asked };
+}
+
+/**
+ * Like runAgentPhase, but agent.command runs in the background: the session
+ * starts at once and the questions arrive live (think's questions.jsonl
+ * watcher). `done` resolves with the finished phase; it never rejects.
+ */
+export function startAgentPhase(input: AgentPhaseInput): {
+	phase: AgentPhase;
+	done: Promise<AgentPhase>;
+} {
+	const plan = planAgentPhase(input);
+	const phase: AgentPhase = {
+		tier: plan.tier,
+		mode: plan.mode,
+		actor: plan.actor,
+		run: null,
+		asked: 0,
+	};
+	if (!plan.run) return { phase, done: Promise.resolve(phase) };
+	const done = plan.run().then((run) => ({
+		...phase,
+		run,
+		asked: askedIn(input.paths, input.node.id, input.session),
+	}));
+	return { phase, done };
 }
 
 /** One-line screen notice describing the agent step, or null. */

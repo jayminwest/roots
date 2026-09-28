@@ -100,7 +100,7 @@ function render(live: Live): void {
 		expired: live.expired,
 		expiredSprouts: live.expiredSprouts,
 	};
-	t.write(frame(renderTend(view, t.columns(), live.deps.colors)));
+	t.write(frame(renderTend(view, t.columns(), live.deps.colors, t.rows())));
 }
 
 /** Leave raw mode while the human is in their editor, then come back. */

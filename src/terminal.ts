@@ -9,6 +9,8 @@
 
 export interface Terminal {
 	columns(): number;
+	/** Terminal height; 0 when unknown (screens then draw at natural height). */
+	rows(): number;
 	write(text: string): void;
 	/** Enter raw mode + alternate screen and start delivering input. */
 	start(onInput: (data: string) => void, onResize?: () => void): void;
@@ -58,6 +60,7 @@ export function processTerminal(): Terminal {
 
 	return {
 		columns: () => out.columns ?? 80,
+		rows: () => out.rows ?? 0,
 		write: (text) => {
 			out.write(text);
 		},

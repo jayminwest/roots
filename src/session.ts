@@ -6,6 +6,7 @@
 //
 //   save (content changed) → answer the current question, advance
 //   d → dismiss   z → snooze   s → skip (stays open)   q → end
+//   a → hand to the agent (tier ≥ 1; it researches, findings come back here)
 // The session ends after the last question is handled, or on q. With no
 // questions at all it is a free-writing session that ends only on q.
 //
@@ -19,8 +20,8 @@
 import type { DiffSpan } from "./diff.ts";
 import type { QuestionRecord } from "./types.ts";
 
-export type Outcome = "answered" | "dismissed" | "snoozed" | "skipped";
-export type SessionKey = "d" | "z" | "s" | "q";
+export type Outcome = "answered" | "dismissed" | "snoozed" | "skipped" | "delegated";
+export type SessionKey = "d" | "z" | "s" | "q" | "a";
 export type EndReason = "completed" | "quit";
 
 export interface SessionState {
@@ -33,17 +34,20 @@ export interface SessionState {
 	ended: EndReason | null;
 	/** One-line feedback for the screen (last thing that happened). */
 	notice: string | null;
+	/** [a] is allowed: agents may work on this idea (tier ≥ 1). */
+	canDelegate: boolean;
 }
 
 export type SessionInput =
-	| { type: "save"; span: DiffSpan }
+	| { type: "save"; span: DiffSpan; lines?: string[] }
 	| { type: "key"; key: SessionKey }
 	| { type: "arrive"; questions: QuestionRecord[]; cap: number };
 
 export type SessionEffect =
-	| { type: "answer"; question: QuestionRecord; span: DiffSpan }
+	| { type: "answer"; question: QuestionRecord; span: DiffSpan; lines?: string[] }
 	| { type: "dismiss"; question: QuestionRecord }
 	| { type: "snooze"; question: QuestionRecord }
+	| { type: "delegate"; question: QuestionRecord }
 	| { type: "end"; reason: EndReason };
 
 export interface Step {
@@ -51,8 +55,8 @@ export interface Step {
 	effects: SessionEffect[];
 }
 
-export function initialState(questions: QuestionRecord[]): SessionState {
-	return { questions, index: 0, outcomes: {}, saves: 0, ended: null, notice: null };
+export function initialState(questions: QuestionRecord[], canDelegate = false): SessionState {
+	return { questions, index: 0, outcomes: {}, saves: 0, ended: null, notice: null, canDelegate };
 }
 
 export function currentQuestion(s: SessionState): QuestionRecord | null {
@@ -64,7 +68,11 @@ const PAST: Record<Outcome, string> = {
 	dismissed: "dismissed (won't be asked again)",
 	snoozed: "snoozed",
 	skipped: "skipped (asked again next session)",
+	delegated: "handed to the agent (its findings come back here)",
 };
+
+const KEY_OUTCOME = { d: "dismissed", z: "snoozed", a: "delegated" } as const;
+const KEY_EFFECT = { d: "dismiss", z: "snooze", a: "delegate" } as const;
 
 function resolve(s: SessionState, q: QuestionRecord, outcome: Outcome, detail = ""): Step {
 	const index = s.index + 1;
@@ -79,12 +87,12 @@ function resolve(s: SessionState, q: QuestionRecord, outcome: Outcome, detail = 
 	return { state, effects: done ? [{ type: "end", reason: "completed" }] : [] };
 }
 
-function onSave(s: SessionState, span: DiffSpan, spanLabel: string): Step {
+function onSave(s: SessionState, span: DiffSpan, spanLabel: string, lines?: string[]): Step {
 	const saved = { ...s, saves: s.saves + 1 };
 	const q = currentQuestion(s);
 	if (!q) return { state: { ...saved, notice: `saved (${spanLabel})` }, effects: [] };
 	const step = resolve(saved, q, "answered", ` (${spanLabel})`);
-	return { ...step, effects: [{ type: "answer", question: q, span }, ...step.effects] };
+	return { ...step, effects: [{ type: "answer", question: q, span, lines }, ...step.effects] };
 }
 
 function onKey(s: SessionState, key: SessionKey): Step {
@@ -98,10 +106,11 @@ function onKey(s: SessionState, key: SessionKey): Step {
 	if (!q)
 		return { state: { ...s, notice: "no question to act on; [q] ends the session" }, effects: [] };
 	if (key === "s") return resolve(s, q, "skipped");
-	const outcome: Outcome = key === "d" ? "dismissed" : "snoozed";
-	const step = resolve(s, q, outcome);
-	const effect: SessionEffect =
-		key === "d" ? { type: "dismiss", question: q } : { type: "snooze", question: q };
+	if (key === "a" && !s.canDelegate) {
+		return { state: { ...s, notice: "agents are off for this idea (tier 0)" }, effects: [] };
+	}
+	const step = resolve(s, q, KEY_OUTCOME[key]);
+	const effect: SessionEffect = { type: KEY_EFFECT[key], question: q };
 	return { ...step, effects: [effect, ...step.effects] };
 }
 
@@ -157,7 +166,9 @@ function onArrive(s: SessionState, incoming: readonly QuestionRecord[], cap: num
 export function step(s: SessionState, input: SessionInput, spanLabel = ""): Step {
 	if (s.ended) return { state: s, effects: [] };
 	if (input.type === "arrive") return onArrive(s, input.questions, input.cap);
-	return input.type === "save" ? onSave(s, input.span, spanLabel) : onKey(s, input.key);
+	return input.type === "save"
+		? onSave(s, input.span, spanLabel, input.lines)
+		: onKey(s, input.key);
 }
 
 export interface SessionTally {
@@ -165,12 +176,20 @@ export interface SessionTally {
 	dismissed: number;
 	snoozed: number;
 	skipped: number;
+	delegated: number;
 	/** Questions never reached (session ended early). */
 	unasked: number;
 }
 
 export function tally(s: SessionState): SessionTally {
-	const t: SessionTally = { answered: 0, dismissed: 0, snoozed: 0, skipped: 0, unasked: 0 };
+	const t: SessionTally = {
+		answered: 0,
+		dismissed: 0,
+		snoozed: 0,
+		skipped: 0,
+		delegated: 0,
+		unasked: 0,
+	};
 	for (const q of s.questions) {
 		const o = s.outcomes[q.id];
 		if (o) t[o]++;
@@ -179,12 +198,19 @@ export function tally(s: SessionState): SessionTally {
 	return t;
 }
 
-/** Map raw terminal input to session keys (Ctrl-C / Ctrl-D end the session). */
+/** CSI (`ESC [ … final`), SS3 (`ESC O x`) and Alt-<key> (`ESC x`) sequences. */
+// biome-ignore lint/suspicious/noControlCharactersInRegex: matching terminal escapes is the point
+const ESCAPE_RE = /\x1b(?:\[[0-9;?]*[ -/]*[@-~]|O.|.)?/g;
+
+/**
+ * Map raw terminal input to session keys (Ctrl-C / Ctrl-D end the session).
+ * Escape sequences are dropped first: arrow up is `ESC [ A`, not [a].
+ */
 export function parseKeys(data: string): SessionKey[] {
 	const out: SessionKey[] = [];
-	for (const ch of data) {
+	for (const ch of data.replace(ESCAPE_RE, "")) {
 		const k = ch.toLowerCase();
-		if (k === "d" || k === "z" || k === "s" || k === "q") out.push(k);
+		if (k === "d" || k === "z" || k === "s" || k === "q" || k === "a") out.push(k);
 		else if (ch === "\x03" || ch === "\x04") out.push("q");
 	}
 	return out;

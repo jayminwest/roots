@@ -60,6 +60,27 @@ export interface Citation {
 	quote: string;
 }
 
+export type HeadingStatus = "active" | "dismissed";
+
+/**
+ * One line of headings.jsonl: an agent's read on where a `roots flow` session
+ * is going. Shown only in the flow pane, labeled [agent]; never in views or
+ * prime. Dedup by id, last wins (dismissal rewrites the record).
+ */
+export interface HeadingRecord {
+	id: string;
+	flow: string;
+	text: string;
+	cites: Citation[];
+	/** Idea the agent suggests thinking about next (optional). */
+	next?: string;
+	by: Actor;
+	status: HeadingStatus;
+	createdAt: string;
+	dismissedBy?: Actor;
+	dismissedAt?: string;
+}
+
 export type ProposalKind = "edge" | "split" | "merge" | "compost";
 export type ProposalStatus = "pending" | "accepted" | "rejected" | "expired";
 
@@ -80,7 +101,15 @@ export interface ProposalRecord {
 	decisionReason?: string;
 }
 
-export type QuestionStatus = "open" | "answered" | "dismissed" | "snoozed";
+export type QuestionStatus = "open" | "answered" | "dismissed" | "snoozed" | "delegated";
+
+/** Agent research attached to a delegated question (`roots note --question`). */
+export interface QuestionFinding {
+	/** The note, relative to the project root (under .roots/agent/notes/). */
+	note: string;
+	by: Actor;
+	at: string;
+}
 
 export interface QuestionRecord {
 	id: string;
@@ -98,6 +127,11 @@ export interface QuestionRecord {
 	answeredAt?: string;
 	dismissedBy?: Actor;
 	dismissedAt?: string;
+	/** [a] in think: the human handed the question to the agent for research. */
+	delegatedBy?: Actor;
+	delegatedAt?: string;
+	/** Research the agent attached; the question is open again once it has any. */
+	findings?: QuestionFinding[];
 	/** Snoozed questions come back once this time has passed. */
 	snoozedUntil?: string;
 	/** Session that asked or last acted on the question. */
@@ -113,6 +147,8 @@ export type EventType =
 	| "answer"
 	| "dismiss"
 	| "snooze"
+	| "delegate"
+	| "undelegate"
 	| "propose"
 	| "accept"
 	| "reject"
@@ -126,7 +162,11 @@ export type EventType =
 	| "unlink"
 	| "tier"
 	| "note"
-	| "scan";
+	| "scan"
+	| "flow.start"
+	| "flow.end"
+	| "heading"
+	| "heading.dismiss";
 
 /**
  * One line of events.jsonl. `node` is the primary subject; `refs` lists other

@@ -160,13 +160,14 @@ export interface FakeTerminal extends Terminal {
 }
 
 /** An in-memory Terminal: records frames, injects keys. */
-export function fakeTerminal(columns = 60): FakeTerminal {
+export function fakeTerminal(columns = 60, rows = 0): FakeTerminal {
 	let onInput: ((d: string) => void) | null = null;
 	const t: FakeTerminal = {
 		started: false,
 		stopped: false,
 		frames: [],
 		columns: () => columns,
+		rows: () => rows,
 		write(text) {
 			if (text.startsWith(ESC.home)) t.frames.push(text);
 		},

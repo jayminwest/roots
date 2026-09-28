@@ -14,11 +14,13 @@ export const ID_PREFIX = {
 	question: "q",
 	edge: "e",
 	session: "ss",
+	heading: "h",
+	flow: "fl",
 } as const;
 
 export type IdPrefix = (typeof ID_PREFIX)[keyof typeof ID_PREFIX];
 
-const ID_RE = /^(r|s|p|q|e|ss)-([0-9a-f]{4,8})$/;
+const ID_RE = /^(r|s|p|q|e|ss|h|fl)-([0-9a-f]{4,8})$/;
 
 export type RandomHex = (length: number) => string;
 

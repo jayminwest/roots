@@ -12,7 +12,7 @@ import { rootsPaths } from "./paths.ts";
 import { addQuestions, readQuestions } from "./questions.ts";
 import type { StatusLine } from "./spinner.ts";
 import { CLI_ENTRY, fakeTerminal, initProject, plant, runJson, waitFor } from "./test-helpers.ts";
-import { runThinkSession, type ThinkDeps } from "./think-session.ts";
+import { type BackgroundJob, runThinkSession, type ThinkDeps } from "./think-session.ts";
 
 const WATCH = { debounceMs: 20, pollMs: 50 };
 const ENV = { PATH: process.env.PATH, HOME: process.env.HOME, NO_COLOR: "1" };
@@ -183,4 +183,38 @@ describe("think with an already-running harness", () => {
 			readQuestions(rootsPaths(root)).find((q) => q.by === "roots:missing-scope")?.status,
 		).toBe("open");
 	});
+});
+
+describe("think in background mode (flow)", () => {
+	test("the session starts before the agent finishes; its questions arrive live", async () => {
+		const { root, id } = await setup();
+		const agent = agentScript(
+			root,
+			[
+				"while [ ! -f go ]; do sleep 0.05; done",
+				'roots ask "$ROOTS_NODE" "Which record wins after a delete?"',
+			].join("\n"),
+		);
+		const jobs: BackgroundJob[] = [];
+		const { d, terminal, statuses } = deps(root, id, {
+			config: config(agent),
+			background: (j) => jobs.push(j),
+		});
+		const running = runThinkSession(d);
+		await waitFor(() => terminal.screen().includes("show up here"), 5000, "background notice");
+		expect(terminal.screen()).toContain("question 1/2");
+		expect(jobs.map((j) => j.label)).toEqual(["agent:agent-sh asking about sync-works-offline"]);
+		expect(statuses).toEqual([]);
+		writeFileSync(join(root, "go"), "");
+		await waitFor(() => terminal.screen().includes("agent asked 1 new"), 15000, "arrival");
+		expect(terminal.screen()).toContain("question 1/3");
+		terminal.send("s");
+		await waitFor(() => terminal.screen().includes("Which record wins"), 3000, "queued next");
+		expect(await jobs[0]?.done).toBeNull();
+		terminal.send("q");
+		const s = await running;
+		expect(s.agent).toMatchObject({ mode: "command", status: "background", asked: 1 });
+		expect(s.proposals).toBeNull();
+		expect(s.changedLines).toEqual([]);
+	}, 30000);
 });

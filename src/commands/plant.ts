@@ -11,6 +11,7 @@ import { appendEvent, makeEvent } from "../events.ts";
 import { updateGraph } from "../graph.ts";
 import { requireTty } from "../guard.ts";
 import type { Io } from "../io.ts";
+import { printNext } from "../next.ts";
 import { createNode } from "../node-create.ts";
 import type { RootsPaths } from "../paths.ts";
 import { contentHash, parseProse } from "../prose.ts";
@@ -49,6 +50,23 @@ export async function plantIdea(
 	});
 }
 
+/** Plant `text` as `by` (statement = first line) and log the plant event. Null when empty. */
+export async function plantText(
+	paths: RootsPaths,
+	text: string,
+	by: Actor,
+	slug?: string,
+): Promise<{ node: NodeRecord; file: string; statement: string } | null> {
+	const { statement } = parseProse(text);
+	if (statement === "") return null;
+	const { node, file } = await plantIdea(paths, { text, statement, slug, by });
+	await appendEvent(
+		paths,
+		makeEvent("plant", by, { node: node.id, slug: node.slug, hash: contentHash(text) }),
+	);
+	return { node, file, statement };
+}
+
 function textFromArgs(args: string[]): string {
 	const statement = args.join(" ").trim();
 	if (statement === "") throw new UsageError("statement is empty");
@@ -75,18 +93,9 @@ export const plantCommand: CommandDef = {
 		const by = resolveHumanActor(io);
 		const { paths } = await openWorkspace(io.cwd);
 		const text = args.length > 0 ? textFromArgs(args) : composeInEditor(io);
-		const { statement } = parseProse(text);
-		if (statement === "") throw new CancelledError("empty idea; nothing planted");
-		const { node, file } = await plantIdea(paths, {
-			text,
-			statement,
-			slug: flagString(flags, "slug"),
-			by,
-		});
-		await appendEvent(
-			paths,
-			makeEvent("plant", by, { node: node.id, slug: node.slug, hash: contentHash(text) }),
-		);
+		const planted = await plantText(paths, text, by, flagString(flags, "slug"));
+		if (!planted) throw new CancelledError("empty idea; nothing planted");
+		const { node, file, statement } = planted;
 		const rel = relative(paths.root, file);
 		await out.result({
 			id: node.id,
@@ -98,5 +107,6 @@ export const plantCommand: CommandDef = {
 		});
 		await out.success(`planted ${out.c.id(node.id)} ${node.slug}`);
 		await out.info(`  ${out.c.dim(rel)}`);
+		await printNext(out, paths);
 	},
 };

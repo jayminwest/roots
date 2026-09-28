@@ -7,6 +7,12 @@
 // still goes through boundary.ts (no traversal, no symlinks, never human/)
 // and is exclusive (O_EXCL). Files are copied byte for byte, up to
 // NOTE_MAX_BYTES. One `note` event per note.
+//
+// With `question` (`--question <q-id>`) the note is the agent's findings on a
+// question the human delegated with [a]: it must be text (md/txt), the
+// question must be delegated and belong to the idea, and the same write
+// reopens the question with the finding attached (the `note` event carries
+// `question`). The human still answers it in idea.md.
 
 import { createHash } from "node:crypto";
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
@@ -17,13 +23,17 @@ import { GuardError, NotFoundError, UsageError, ValidationError } from "./errors
 import { appendEvent, makeEvent } from "./events.ts";
 import { hexOf } from "./ids.ts";
 import type { RootsPaths } from "./paths.ts";
+import { readQuestions } from "./questions.ts";
 import { slugify } from "./slug.ts";
+import { updateTable } from "./store.ts";
 import { requireTier } from "./tier.ts";
 import { isoNow } from "./time.ts";
-import type { Actor, NodeRecord } from "./types.ts";
+import type { Actor, NodeRecord, QuestionRecord } from "./types.ts";
 
 export const NOTE_MAX_BYTES = 1024 * 1024;
 const EXT_RE = /^[a-z0-9]{1,10}$/;
+/** Findings are shown on the think screen, so they must be text. */
+export const FINDING_EXTS = ["md", "markdown", "txt"] as const;
 
 export interface NoteEntry {
 	name: string;
@@ -109,6 +119,8 @@ export interface NoteInput {
 	cwd: string;
 	/** Display name for the note (default: the source file name). */
 	name?: string;
+	/** Findings for this delegated question (q-id). */
+	question?: string;
 	by: Actor;
 	now?: Date;
 }
@@ -116,6 +128,37 @@ export interface NoteInput {
 export interface NoteResult {
 	note: NoteEntry;
 	node: string;
+	/** Set when the note answered a delegated question (now open again). */
+	question?: string;
+}
+
+function checkQuestion(paths: RootsPaths, node: NodeRecord, id: string): void {
+	const q = readQuestions(paths).find((r) => r.id === id);
+	if (!q) throw new NotFoundError(`no question ${id}`);
+	if (q.node !== node.id)
+		throw new ValidationError(`${id} is a question on ${q.node}, not ${node.id}`);
+	if (q.status !== "delegated") {
+		throw new ValidationError(
+			`${id} is ${q.status}; findings go only on questions the human handed to the agent ([a] in think)`,
+		);
+	}
+}
+
+function checkFindingName(name: string): void {
+	if (!(FINDING_EXTS as readonly string[]).includes(noteExt(name))) {
+		throw new ValidationError(`findings must be a text file (.${FINDING_EXTS.join(", .")})`);
+	}
+}
+
+/** Attach the finding and reopen the question (no-op if it is no longer delegated). */
+function reopenWithFinding(paths: RootsPaths, id: string, note: string, by: Actor, at: string) {
+	return updateTable<QuestionRecord, boolean>(paths.questions, (rows) => {
+		const q = rows.find((r) => r.id === id);
+		if (q?.status !== "delegated") return { rows, write: false, result: false };
+		q.status = "open";
+		q.findings = [...(q.findings ?? []), { note, by, at }];
+		return { rows, write: true, result: true };
+	});
 }
 
 /** Validate and copy one note into .roots/agent/notes/<hex>/. */
@@ -124,6 +167,7 @@ export async function attachNote(paths: RootsPaths, input: NoteInput): Promise<N
 	checkTarget(input.node);
 	requireTier(loadConfig(paths), 1, "`roots note`", input.node);
 	const src = resolve(input.cwd, input.file);
+	if (input.question) checkQuestion(paths, input.node, input.question);
 	if (isInside(paths.dir, src) || isInside(paths.dir, realOrSelf(src))) {
 		throw new UsageError("a note is an outside artifact; files under .roots/ cannot be attached");
 	}
@@ -133,17 +177,23 @@ export async function attachNote(paths: RootsPaths, input: NoteInput): Promise<N
 	const taken = new Set(listNotes(paths, input.node).map((n) => n.name));
 	const display = input.name?.trim() || basename(src);
 	const name = noteFileName(display, now, taken, noteExt(basename(src)));
+	if (input.question) checkFindingName(name);
 	const target = join(dir, name);
 	agentWriteExclusive(paths, target, data);
 	const note: NoteEntry = { name, path: relative(paths.root, target), bytes: data.length };
+	const at = isoNow(now);
+	const q = input.question;
+	const reopened = q ? await reopenWithFinding(paths, q, note.path, input.by, at) : false;
 	await appendEvent(
 		paths,
 		makeEvent("note", input.by, {
+			at,
 			node: input.node.id,
 			file: note.path,
 			bytes: note.bytes,
 			hash: `sha256:${createHash("sha256").update(data).digest("hex")}`,
+			...(reopened ? { question: q } : {}),
 		}),
 	);
-	return { note, node: input.node.id };
+	return { note, node: input.node.id, ...(reopened && q ? { question: q } : {}) };
 }

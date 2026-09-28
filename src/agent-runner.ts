@@ -10,6 +10,7 @@
 //   ROOTS_AGENT    agent:<model> — the identity its `roots ask` calls use
 //   ROOTS_SESSION  the think session, so asks attach to it
 //   ROOTS_NODE     the idea id
+//   ROOTS_FLOW     the flow session (heading runs only)
 // ROOTS_USER and the test-only TTY override are removed from its env.
 //
 // Failure never blocks thinking: non-zero exit, a spawn error or a timeout
@@ -81,16 +82,18 @@ export function agentActorFor(command: string): Actor {
 
 export function agentEnv(
 	base: Record<string, string | undefined>,
-	vars: { actor: Actor; session: string; node: string },
+	vars: { actor: Actor; session?: string; node?: string; flow?: string },
 ): Record<string, string> {
 	const env: Record<string, string> = {};
 	for (const [k, v] of Object.entries(base)) {
 		if (v === undefined || k === "ROOTS_USER" || k === "ROOTS_FORCE_TTY") continue;
+		if (k === "ROOTS_SESSION" || k === "ROOTS_NODE" || k === "ROOTS_FLOW") continue;
 		env[k] = v;
 	}
 	env.ROOTS_AGENT = vars.actor;
-	env.ROOTS_SESSION = vars.session;
-	env.ROOTS_NODE = vars.node;
+	if (vars.session) env.ROOTS_SESSION = vars.session;
+	if (vars.node) env.ROOTS_NODE = vars.node;
+	if (vars.flow) env.ROOTS_FLOW = vars.flow;
 	return env;
 }
 

@@ -5,6 +5,7 @@
 import { flagString } from "../args.ts";
 import { acceptItem, type Decision, rejectItem } from "../decide.ts";
 import { hasInteractiveTty, requireHumanCommand } from "../guard.ts";
+import { printNext } from "../next.ts";
 import type { Output } from "../output.ts";
 import type { CommandDef } from "../registry.ts";
 import { openWorkspace } from "../workspace.ts";
@@ -99,6 +100,7 @@ export const acceptCommand: CommandDef = {
 		});
 		await out.result(decisionJson(d));
 		if (!out.quiet) await out.lines(decisionLines(out, d));
+		await printNext(out, ws.paths);
 	},
 };
 
@@ -121,5 +123,6 @@ export const rejectCommand: CommandDef = {
 		const d = await rejectItem({ paths: ws.paths, by }, args[0] ?? "", flagString(flags, "reason"));
 		await out.result(decisionJson(d));
 		if (!out.quiet) await out.lines(decisionLines(out, d));
+		await printNext(out, ws.paths);
 	},
 };

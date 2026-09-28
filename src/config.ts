@@ -27,6 +27,8 @@ export interface RootsConfig {
 	/** Thresholds for the deterministic question rules (see src/rules.ts). */
 	questions: QuestionThresholds;
 	view: { write: boolean };
+	/** `roots flow`: heading = ask the agent where the session is going. */
+	flow: { heading: boolean };
 }
 
 export interface QuestionThresholds {
@@ -69,6 +71,7 @@ export function defaultConfig(project: string): RootsConfig {
 		},
 		questions: { ...DEFAULT_QUESTION_THRESHOLDS },
 		view: { write: false },
+		flow: { heading: true },
 	};
 }
 
@@ -158,6 +161,9 @@ export function configFromYaml(doc: YamlMap, fallbackProject: string): RootsConf
 		limits: readLimits(asMap(doc.limits, "limits"), d.limits),
 		questions: readQuestions(asMap(doc.questions, "questions"), d.questions),
 		view: { write: readBool(asMap(doc.view, "view"), "write", "view.write", d.view.write) },
+		flow: {
+			heading: readBool(asMap(doc.flow, "flow"), "heading", "flow.heading", d.flow.heading),
+		},
 	};
 }
 
@@ -190,6 +196,7 @@ function toYaml(config: RootsConfig): YamlMap {
 		limits: { ...config.limits },
 		questions: { ...config.questions },
 		view: { ...config.view },
+		flow: { ...config.flow },
 	};
 }
 
@@ -226,6 +233,8 @@ export function renderInitialConfig(config: RootsConfig): string {
 		`  snoozeDays: ${t.snoozeDays}            # [z] in think hides a question for N days`,
 		"view:",
 		`  write: ${config.view.write}             # true: \`roots view\` also writes ROOTS.md`,
+		"flow:",
+		`  heading: ${config.flow.heading}           # \`roots flow\`: the agent says where the session is going`,
 		"",
 	].join("\n");
 }

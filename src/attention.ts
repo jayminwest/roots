@@ -4,6 +4,7 @@
 // Queue order (first = most in need):
 //   1. ideas with due questions (asked before, still open, or snoozed and
 //      due again) before ideas with only new rule candidates
+//   1b. among those, ideas where agent findings came back ([a] in think)
 //   2. more pending work (due + candidates) first
 //   3. planted before shaping before committed (young ideas need shape)
 //   4. least recently touched by a human first
@@ -17,6 +18,7 @@ import type { RootsPaths } from "./paths.ts";
 import { type NodeDirs, readNodeProse } from "./prose.ts";
 import {
 	dueQuestions,
+	hasFindings,
 	type NodeActivity,
 	nodeActivity,
 	readQuestions,
@@ -43,9 +45,16 @@ export function needs(a: IdeaAttention): number {
 	return a.due.length + a.candidates.length;
 }
 
+/** Due questions whose delegated research came back. */
+export function findingsReady(a: Pick<IdeaAttention, "due">): number {
+	return a.due.filter(hasFindings).length;
+}
+
 export function compareAttention(a: IdeaAttention, b: IdeaAttention): number {
 	const hasDue = Number(b.due.length > 0) - Number(a.due.length > 0);
 	if (hasDue !== 0) return hasDue;
+	const found = Number(findingsReady(b) > 0) - Number(findingsReady(a) > 0);
+	if (found !== 0) return found;
 	if (needs(a) !== needs(b)) return needs(b) - needs(a);
 	const rank = (STATUS_RANK[a.node.status] ?? 9) - (STATUS_RANK[b.node.status] ?? 9);
 	if (rank !== 0) return rank;

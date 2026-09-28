@@ -9,6 +9,7 @@ import { loadConfig } from "../config.ts";
 import { GuardError, UsageError } from "../errors.ts";
 import { requireTty } from "../guard.ts";
 import type { Io } from "../io.ts";
+import { printNext } from "../next.ts";
 import type { Output } from "../output.ts";
 import { readNodeProse } from "../prose.ts";
 import type { CommandDef } from "../registry.ts";
@@ -16,7 +17,7 @@ import { resolveNode } from "../resolve.ts";
 import { startStatus } from "../spinner.ts";
 import { editorHint, launchEditorSplit, type SplitLaunch } from "../split.ts";
 import type { ScreenGuidance } from "../think-screen.ts";
-import { runThinkSession, type SessionSummary } from "../think-session.ts";
+import { runThinkSession, type SessionSummary, type ThinkDeps } from "../think-session.ts";
 import type { Actor, NodeRecord } from "../types.ts";
 import { openWorkspace, type Workspace } from "../workspace.ts";
 
@@ -44,6 +45,7 @@ export function tallyLine(s: SessionSummary): string {
 		t.dismissed ? `${t.dismissed} dismissed` : "",
 		t.snoozed ? `${t.snoozed} snoozed` : "",
 		t.skipped ? `${t.skipped} skipped` : "",
+		t.delegated ? `${t.delegated} handed to the agent` : "",
 		t.unasked ? `${t.unasked} left for next time` : "",
 	].filter(Boolean);
 	return parts.length > 0 ? parts.join(", ") : "no questions";
@@ -74,10 +76,25 @@ async function printSummary(
 	}
 	if (filed.length + agentFiled.length > 0)
 		await out.info(c.dim("  review them with `roots tend`"));
+	const research = delegationLine(s);
+	if (research) await out.info(`  ${research}`);
 	const line = agentLine(s);
 	if (line) await out.info(`  ${line}`);
 	if (s.agent.error)
 		out.warn(`agent.command ${s.agent.error}; the session used roots' own questions`);
+}
+
+function delegationLine(s: SessionSummary): string | null {
+	const d = s.delegation;
+	if (!d || d.status === "background") return null;
+	const parts = [
+		d.found.length > 0
+			? `${d.actor} researched ${d.found.join(", ")}: findings wait under the question next session`
+			: "",
+		d.returned.length > 0 ? `${d.returned.join(", ")} came back without findings` : "",
+	].filter(Boolean);
+	if (d.error) parts.push(`research run: ${d.error}`);
+	return parts.length > 0 ? parts.join("; ") : null;
 }
 
 function agentLine(s: SessionSummary): string | null {
@@ -111,13 +128,25 @@ export async function startThink(
 	io: Io,
 	ws: Workspace,
 	node: NodeRecord,
-	opts: { by: Actor; split: boolean; guidance?: ScreenGuidance },
+	opts: {
+		by: Actor;
+		split: boolean;
+		guidance?: ScreenGuidance;
+		/** Background agent mode (flow); see ThinkDeps.background. */
+		background?: ThinkDeps["background"];
+		/** Opens the editor instead of a fresh split (flow reuses one pane). */
+		launch?: (file: string) => SplitLaunch;
+	},
 ): Promise<ThinkRun> {
 	const terminal = io.terminal;
 	if (!terminal) throw new GuardError("`roots think` needs an interactive terminal");
 	const prose = readNodeProse(ws.paths, node, ws.dirs);
 	const file = prose.path ? relative(ws.paths.root, prose.path) : "";
-	const launch = opts.split ? launchEditorSplit(io.env, file, ws.paths.root) : null;
+	const launch = !opts.split
+		? null
+		: opts.launch
+			? opts.launch(file)
+			: launchEditorSplit(io.env, file, ws.paths.root);
 	const summary = await runThinkSession({
 		paths: ws.paths,
 		config: loadConfig(ws.paths),
@@ -127,8 +156,10 @@ export async function startThink(
 		colors: makeColors(colorEnabled(io.env, true)),
 		editorHint: editorHint(launch, file),
 		env: io.env,
-		agentStatus: (text) => startStatus(io.stderr, text, { animate: io.stdoutIsTTY }),
+		agentStatus: (text) =>
+			startStatus(io.stderr, text, { animate: io.stdoutIsTTY, columns: () => terminal.columns() }),
 		guidance: opts.guidance,
+		background: opts.background,
 	});
 	return { summary, file, launch };
 }
@@ -142,7 +173,9 @@ export const thinkCommand: CommandDef = {
 		"Shows one question at a time about the idea. Write in idea.md in your editor:\n" +
 		"a save that changes the file answers the current question and moves on.\n" +
 		"Keys: [d] dismiss (never ask again)  [z] snooze  [s] skip  [q] end session.\n" +
-		"Inside tmux, zellij or herdr, $EDITOR opens in a split pane; otherwise open the\n" +
+		"[a] ask agent (tier ≥ 1): after the session agent.command researches the question\n" +
+		"and attaches findings; it comes back with them, and you still answer in idea.md.\n" +
+		"Inside tmux or zellij, $EDITOR opens in a split pane; otherwise open the\n" +
 		"printed path in another pane. With no id, think picks the idea most in need:\n" +
 		"ideas with open questions first, then the most pending questions, planted before\n" +
 		"shaping before committed, least recently touched first (see `roots queue`).",
@@ -159,5 +192,6 @@ export const thinkCommand: CommandDef = {
 		const run = await startThink(io, ws, node, { by, split: !flagBool(flags, "no-split") });
 		await out.result({ ...run.summary, slug: node.slug, path: run.file, split: run.launch });
 		await printSummary(out, ws, node, run.summary);
+		await printNext(out, ws.paths, { exclude: node.id });
 	},
 };

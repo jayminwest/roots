@@ -12,8 +12,16 @@ export interface ScreenEdge {
 	slug: string;
 }
 
+export interface ScreenFinding {
+	/** First paragraph of the agent's findings note. */
+	text: string;
+	path: string;
+}
+
 export interface ScreenQuestion {
 	text: string;
+	/** The agent's research on a delegated question, shown under it. */
+	findings?: ScreenFinding | null;
 	/** Rule name, `agent`, or another source label. */
 	source: string;
 	/** 1-based position and total. */
@@ -31,6 +39,8 @@ export interface ScreenView {
 	notice: string | null;
 	/** Where the idea file is being edited. */
 	editorHint: string;
+	/** [a] is offered (agents may work on this idea). */
+	canDelegate?: boolean;
 	/** Shown above the question, e.g. an accepted split proposal (agent text, dimmed). */
 	guidance?: ScreenGuidance | null;
 }
@@ -42,7 +52,7 @@ export interface ScreenGuidance {
 	text: string;
 }
 
-interface Seg {
+export interface Seg {
 	t: string;
 	s?: (x: string) => string;
 }
@@ -76,7 +86,7 @@ export function wrapText(text: string, width: number): string[] {
 }
 
 /** Fit styled segments into exactly `width` visible columns. */
-function fit(segs: readonly Seg[], width: number): string {
+export function fit(segs: readonly Seg[], width: number): string {
 	let used = 0;
 	let out = "";
 	for (const seg of segs) {
@@ -115,7 +125,7 @@ function edgeRows(v: ScreenView, c: Colors): Seg[][] {
 	});
 }
 
-function divider(label: string, source: string | null, inner: number, c: Colors): Seg[] {
+export function divider(label: string, source: string | null, inner: number, c: Colors): Seg[] {
 	const head = `── ${label} ──${source ? ` [${source}] ` : " "}`;
 	return [{ t: head + "─".repeat(Math.max(0, inner - [...head].length)), s: c.dim }];
 }
@@ -133,6 +143,26 @@ function questionRows(v: ScreenView, inner: number, c: Colors): Seg[][] {
 	return [
 		divider(`question ${q.index}/${q.total}`, q.source, inner, c),
 		...wrapText(q.text, inner).map((t) => [{ t, s: c.bold }]),
+		...findingRows(q.findings ?? null, inner, c),
+	];
+}
+
+const FINDING_LINES = 5;
+
+function findingRows(f: ScreenFinding | null, inner: number, c: Colors): Seg[][] {
+	if (!f) return [];
+	let lines = wrapText(f.text, inner);
+	if (lines.length > FINDING_LINES) {
+		lines = [
+			...lines.slice(0, FINDING_LINES - 1),
+			truncate(`${lines[FINDING_LINES - 1]} …`, inner),
+		];
+	}
+	return [
+		[],
+		divider("findings", "agent", inner, c),
+		...lines.map((t) => [{ t, s: c.dim }]),
+		[{ t: truncate(`full: ${f.path}`, inner), s: c.dim }],
 	];
 }
 
@@ -188,6 +218,7 @@ function keyRows(v: ScreenView, inner: number, c: Colors): Seg[][] {
 				["d", "dismiss"],
 				["z", "snooze"],
 				["s", "skip"],
+				...(v.canDelegate ? [["a", "ask agent"] as [string, string]] : []),
 				["q", "end session"],
 			]
 		: [["q", "end session"]];
@@ -210,26 +241,35 @@ export function screenWidth(columns: number): number {
 	return Math.max(MIN_WIDTH, Math.min(MAX_WIDTH, columns));
 }
 
-export function renderScreen(v: ScreenView, columns: number, c: Colors): string[] {
+/**
+ * Draw the screen. With `rows` (terminal height), the box grows to fill it:
+ * blank rows go above the notice and keys, so they sit at the bottom. It
+ * never grows past `rows`: edges fold first, then the bottom of the content
+ * is cut, so the title border never scrolls off-screen.
+ */
+export function renderScreen(v: ScreenView, columns: number, c: Colors, rows = 0): string[] {
 	const width = screenWidth(columns);
 	const inner = width - 4;
 	const statement = truncate(`"${v.statement || "(empty)"}"`, inner);
-	const rows: Seg[][] = [
-		header(v, inner, c),
-		[{ t: statement }],
-		[],
-		...edgeRows(v, c),
-		[],
-		...guidanceRows(v, inner, c),
-		...questionRows(v, inner, c),
-		[],
+	const edges = edgeRows(v, c);
+	const rest = [[], ...guidanceRows(v, inner, c), ...questionRows(v, inner, c), []];
+	let content: Seg[][] = [header(v, inner, c), [{ t: statement }], [], ...edges, ...rest];
+	const footer: Seg[][] = [
 		v.notice ? [{ t: `✓ ${v.notice}`, s: c.green }] : [],
 		...keyRows(v, inner, c),
 	];
 	const title = truncate(` roots think ${v.slug} `, width - 4);
 	const top = `┌─${title}${"─".repeat(Math.max(0, width - 3 - [...title].length))}┐`;
-	const body = rows.map((r) => `│ ${fit(r, inner)} │`);
-	const bottom = `└${"─".repeat(width - 2)}┘`;
 	const hint = wrapText(v.editorHint, width - 2).map((l) => ` ${c.dim(l)}`);
+	const room = rows > 0 ? Math.max(0, rows - footer.length - 2 - hint.length) : Infinity;
+	if (content.length > room && v.edges.length > 1) {
+		const folded: Seg[][] = [[{ t: `${v.edges.length} links (terminal too short)`, s: c.dim }]];
+		content = [header(v, inner, c), [{ t: statement }], [], ...folded, ...rest];
+	}
+	content = content.slice(0, room);
+	const spare = Math.max(0, rows - (content.length + footer.length + 2 + hint.length));
+	const filler: Seg[][] = Array.from({ length: spare }, () => []);
+	const body = [...content, ...filler, ...footer].map((r) => `│ ${fit(r, inner)} │`);
+	const bottom = `└${"─".repeat(width - 2)}┘`;
 	return [c.dim(top), ...body, c.dim(bottom), ...hint];
 }
