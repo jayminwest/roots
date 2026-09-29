@@ -222,6 +222,7 @@ function view(live: Live): ScreenView {
 		edges: live.edges,
 		question: q
 			? {
+					id: q.id,
 					text: q.text,
 					source: questionSource(q),
 					index: live.state.index + 1,

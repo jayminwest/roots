@@ -19,6 +19,8 @@ export interface ScreenFinding {
 }
 
 export interface ScreenQuestion {
+	/** Question id (q-xxxx), so the human can cite it to an agent or `roots` command. */
+	id: string;
 	text: string;
 	/** The agent's research on a delegated question, shown under it. */
 	findings?: ScreenFinding | null;
@@ -141,7 +143,7 @@ function questionRows(v: ScreenView, inner: number, c: Colors): Seg[][] {
 		];
 	}
 	return [
-		divider(`question ${q.index}/${q.total}`, q.source, inner, c),
+		divider(`question ${q.index}/${q.total} · ${q.id}`, q.source, inner, c),
 		...wrapText(q.text, inner).map((t) => [{ t, s: c.bold }]),
 		...findingRows(q.findings ?? null, inner, c),
 	];

@@ -14,6 +14,7 @@ const VIEW: ScreenView = {
 		{ rel: "tension", direction: "in", id: "r-e5f6", slug: "server-authoritative" },
 	],
 	question: {
+		id: "q-7f3a",
 		text: "What happens to an offline edit on a record someone else deleted?",
 		source: "agent",
 		index: 2,
@@ -68,7 +69,7 @@ describe("think screen", () => {
 				"│ serves     → r-c3d4 local-first        │",
 				"│ tension    ↔ r-e5f6 server-authoritat… │",
 				"│                                        │",
-				"│ ── question 2/3 ── [agent] ─────────── │",
+				"│ ── question 2/3 · q-7f3a ── [agent] ── │",
 				"│ What happens to an offline edit on a   │",
 				"│ record someone else deleted?           │",
 				"│                                        │",
