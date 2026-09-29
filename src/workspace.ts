@@ -1,7 +1,7 @@
 // Open a roots project for a command: locate .roots/, reconcile node
 // directories the human renamed by hand, and load the graph.
 //
-// Directory fix-up (SPEC "IDs and slugs"): if `.roots/human/a1b2-offline-sync`
+// Directory fix-up (roots-4143): if `.roots/human/a1b2-offline-sync`
 // was renamed in the shell to `a1b2-sync-offline`, the next read finds it by
 // hex prefix and updates the node's slug to `sync-offline`, logging an `mv`
 // event by `roots:dir-rename`. Fix-up only writes graph.jsonl/events.jsonl,

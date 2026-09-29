@@ -2,7 +2,7 @@
 
 ## Mission
 
-**Roots**: git-native intent for projects. Humans write ideas. Agents ask questions and propose structure. Agents never write human intent. `SPEC.md` is the design source of truth. Read it before you change behavior. If code and spec disagree, raise it. Do not quietly pick one.
+**Roots**: git-native intent for projects. Humans write ideas. Agents ask questions and propose structure. Agents never write human intent. Direction lives in seeds (`sd ready`, what to build) and roots (the project's intent). There is no spec doc: the code, README and tests describe current behavior. If a change conflicts with recorded intent, raise it. Do not quietly pick one.
 
 Part of os-eco. Seeds = what to do, Mulch = what we learned, Roots = why.
 
@@ -97,7 +97,7 @@ src/*.ts            store, ids, config, output, graph, etc.
   seeds-link.ts     read-only .seeds/issues.jsonl: linkedIssues() (intent field, else r- mention), readyToMarkBuilt()
   mulch-link.ts     read-only .mulch/expertise/*.jsonl: learningsFor() (records citing an r- id)
   drift.ts          gatherDrift() (git, never throws) + matchDrift() (slug/prose/seeds/commit + serves ancestors)
-.roots/             (in user projects) format defined in SPEC.md
+.roots/             (in user projects) format: see README and src/types.ts
 ```
 
 ## Invariants (do not break)
@@ -114,13 +114,12 @@ src/*.ts            store, ids, config, output, graph, etc.
 ## Agent Workflow
 
 - Start: `ml prime`, `sd prime`, `sd ready`.
-- Build in the order in SPEC.md "Build Order". Make the tier-0 `think` loop feel good before you add agent features.
+- Pick work from `sd ready`. Make the tier-0 `think` loop feel good before you add agent features.
 - Track work in `sd`. Record learnings with `ml record <domain>`. Domains: `cli store graph think agent view`.
 - Before you finish: `bun run verify`, `sd close <id>`, `ml sync`, then commit. Commit only when asked.
 
 ## Further reading
 
-- `SPEC.md`: design source of truth
 - `README.md`: user-facing overview and command reference
 - `RUNBOOK.md`: gate failures, flaky tests, repairing `.roots/`
 - `CONTRIBUTING.md`, `CHANGELOG.md`

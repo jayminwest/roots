@@ -1,5 +1,5 @@
 // The anchor → serves walk shared by `roots prime` and `roots view`
-// (SPEC "Views: the culmination", steps 1–3). Pure.
+// (roots-ecaa; view.ts steps 1–3). Pure.
 //
 // Anchors are ideas with no outgoing `serves` to another included idea. From
 // each anchor the walk follows incoming `serves` edges depth-first. Children

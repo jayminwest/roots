@@ -13,7 +13,7 @@ import { rootsPaths } from "./paths.ts";
 import { tempDir } from "./test-helpers.ts";
 
 describe("config", () => {
-	test("defaults mirror the SPEC example", () => {
+	test("default values", () => {
 		const c = defaultConfig("myapp");
 		expect(c.tier).toBe(2);
 		expect(c.limits).toEqual({

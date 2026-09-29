@@ -1,4 +1,4 @@
-// Graph invariants (SPEC "Edge types"). Pure. Used when an edge is created
+// Graph invariants (roots-4143). Pure. Used when an edge is created
 // (`link`, `accept`, `adopt`), when an agent proposes one (so it cannot file
 // an edge a human could never accept), and by `roots verify` over the whole
 // graph.

@@ -1,4 +1,4 @@
-// `roots view`: the compiled culmination (SPEC "Views: the culmination").
+// `roots view`: the compiled culmination (roots-ecaa).
 //
 //   1. Anchors: `committed`/`shaping` ideas with no outgoing `serves`
 //      (to another live idea).
@@ -12,7 +12,7 @@
 //
 // Ideas the walk never reaches (planted ideas, and ideas that only serve
 // planted or built ones) are not dropped silently: they are listed, one line
-// each, under "Not yet under an anchor". SPEC's anchors are only
+// each, under "Not yet under an anchor". Anchors are only
 // committed/shaping ideas, so a planted idea is not a goal yet, but hiding it
 // would make the document lie about what the graph holds.
 //

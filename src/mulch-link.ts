@@ -1,4 +1,4 @@
-// Mulch integration (SPEC "Integration → Mulch"). Read-only: roots reads
+// Mulch integration (roots-4689). Read-only: roots reads
 // <project>/.mulch/expertise/<domain>.jsonl directly and never writes to
 // .mulch/.
 //

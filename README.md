@@ -23,8 +23,6 @@ never mix.
 - **Nothing auto-accepts.** Only a human creates edges, changes status or accepts a proposal.
 - **Zero runtime dependencies.** Bun + TypeScript, JSONL + advisory locks, `--json` everywhere.
 
-The full design is in [SPEC.md](SPEC.md).
-
 ## Install
 
 Roots is pre-release and not yet published to npm. Install from source (needs

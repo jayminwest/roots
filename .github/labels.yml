@@ -52,7 +52,7 @@
   description: "CLI commands and entry points"
 - name: "area/docs"
   color: "0e8a16"
-  description: "Documentation (README, SPEC, AGENTS.md, docs/)"
+  description: "Documentation (README, AGENTS.md, docs/)"
 - name: "area/test"
   color: "0e8a16"
   description: "Test coverage: add, fix, or strengthen tests"

@@ -1,7 +1,7 @@
 // ID generation and parsing.
 //
 // Node IDs are `<prefix>-<hex>` where hex is 4 chars, extended to 6 when 4-char
-// candidates keep colliding (SPEC "IDs and slugs"). Ideas (r-) and sprouts
+// candidates keep colliding (roots-4143). Ideas (r-) and sprouts
 // (s-) share one hex namespace so a bare hex like `a1b2` always resolves to a
 // single node and directory names never clash.
 

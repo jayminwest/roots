@@ -1,5 +1,5 @@
-// TTY guard for commands that create human content (SPEC "The human/agent
-// boundary", guard 1). Agents in harnesses have no interactive stdin.
+// TTY guard for commands that create human content (roots-4143; human/agent
+// boundary guard 1). Agents in harnesses have no interactive stdin.
 //
 // Test-only override: ROOTS_FORCE_TTY=1 is honored ONLY together with
 // NODE_ENV=test (set by `bun test`). It exists so the test suite can drive

@@ -55,7 +55,7 @@ export const DEFAULT_QUESTION_THRESHOLDS: QuestionThresholds = {
 export const CONFIG_VERSION = "1";
 export const DEFAULT_AGENT_TIMEOUT_SECONDS = 120;
 
-/** Defaults mirror the SPEC.md config.yaml example. */
+/** Default config values. */
 export function defaultConfig(project: string): RootsConfig {
 	return {
 		project,

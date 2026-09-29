@@ -1,4 +1,4 @@
-// Adopting a sprout (SPEC "Adopting a sprout"). Adoption never copies text:
+// Adopting a sprout (roots-031e). Adoption never copies text:
 // the human writes a new idea in their own words while the sprout is shown
 // for reference. This module is the non-interactive core; the editor and
 // reference display live in commands/adopt.ts.

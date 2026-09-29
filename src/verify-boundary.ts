@@ -1,5 +1,5 @@
 // `roots verify` checks on disk: node directories, the .roots/human/ tree
-// (stray files, symlinks), and the idea.md hash ledger (SPEC guard 4).
+// (stray files, symlinks), and the idea.md hash ledger (roots-ecaa; guard 4).
 // Codes are documented in verify.ts.
 
 import { existsSync, lstatSync, readdirSync, readFileSync } from "node:fs";

@@ -37,7 +37,7 @@ agent command. These are security issues:
 Not in scope:
 
 - A deliberately malicious actor with shell access. The human/agent boundary defends against
-  accidental mixing, not against an attacker (see SPEC.md "The human/agent boundary").
+  accidental mixing, not against an attacker.
 - Denial of service through large input files.
 - Behavior of the agent that `agent.command` runs.
 

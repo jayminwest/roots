@@ -1,4 +1,4 @@
-// `roots flow`, the shell (SPEC "Flow"): one long session that moves from
+// `roots flow`, the shell (roots-ed3c): one long session that moves from
 // idea to idea without dropping to the shell. Between think sessions it
 // shows the transition card (flow.ts / flow-render.ts): the trail, the
 // agent's heading, running agent work, the inbox and the next pick.

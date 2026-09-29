@@ -1,4 +1,4 @@
-// Seeds integration (SPEC "Integration → Seeds"). Read-only: roots reads
+// Seeds integration (roots-4689). Read-only: roots reads
 // <project>/.seeds/issues.jsonl directly (no `sd` process, no dependency on
 // seeds) and never writes to .seeds/.
 //

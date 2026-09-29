@@ -1,4 +1,4 @@
-// Idea lifecycle (SPEC "Idea Lifecycle"). Only a human changes status.
+// Idea lifecycle. Only a human changes status.
 //
 //   planted → shaping → committed → built
 //   (any) ─────────────────────────────→ composted

@@ -1,4 +1,4 @@
-// The flow transition card (SPEC "Flow"). Pure: FlowCard + frame info in,
+// The flow transition card (roots-3ad0). Pure: FlowCard + frame info in,
 // lines out. Same box and helpers as the think screen.
 //
 //   ┌─ roots flow ── warren ── 23m ── inbox 3 ──────────┐

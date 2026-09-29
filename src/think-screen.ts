@@ -1,4 +1,4 @@
-// The left-pane think screen (SPEC "The think Loop (UX)"). Pure: takes a
+// The left-pane think screen (roots-b0ea). Pure: takes a
 // view model, returns lines. Raw ANSI via Colors (NO_COLOR respected).
 
 import type { Colors } from "./color.ts";
@@ -203,7 +203,7 @@ function gridWidth(cells: readonly string[], widths: readonly number[]): number 
 	return max;
 }
 
-/** The widest grid (at most 3 per row, as in the SPEC mockup) that fits. */
+/** The widest grid (at most 3 per row) that fits. */
 function keyGrid(cells: readonly string[], inner: number): number[] {
 	for (let cols = Math.min(3, cells.length); cols > 1; cols--) {
 		const widths = columnWidths(cells, cols);

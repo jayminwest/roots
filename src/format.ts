@@ -38,7 +38,7 @@ export function truncate(s: string, max: number): string {
 
 export type EdgeDirection = "out" | "in";
 
-/** Label + arrow for an edge seen from one of its ends (SPEC think/tend mockups). */
+/** Label + arrow for an edge seen from one of its ends. */
 export function edgeLabel(
 	rel: EdgeRecord["rel"],
 	dir: EdgeDirection,

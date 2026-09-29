@@ -1,4 +1,4 @@
-// The context packet for one idea (SPEC "Questions: guiding thinking"):
+// The context packet for one idea (roots-e3a2):
 // what an agent needs to ask good, specific questions. Read-only. Used by
 // `roots context` and by `think` as the stdin of agent.command.
 //

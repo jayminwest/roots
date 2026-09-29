@@ -1,6 +1,6 @@
 # Roots Operations Runbook
 
-Procedures only. For conventions see `AGENTS.md`; for design see `SPEC.md`. Read each section as
+Procedures only. For conventions see `AGENTS.md`; for direction see seeds (`sd ready`). Read each section as
 "run X; if Y, then Z".
 
 Roots is pre-release (`"private": true`, version `0.0.0`). There is no publish workflow yet, so

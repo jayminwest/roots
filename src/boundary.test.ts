@@ -1,5 +1,5 @@
-// Security tests for the human/agent boundary (SPEC "The human/agent
-// boundary"; AGENTS.md invariant 1): no agent command writes under
+// Security tests for the human/agent boundary (roots-ecaa;
+// AGENTS.md invariant 1): no agent command writes under
 // .roots/human/, whatever the input — path traversal, absolute paths,
 // symlinks planted in the agent tree, or hostile names.
 

@@ -1,4 +1,4 @@
-// Record shapes for .roots/*.jsonl. See SPEC.md "On-Disk Format".
+// Record shapes for .roots/*.jsonl.
 
 export const IDEA_STATUSES = ["planted", "shaping", "committed", "built", "composted"] as const;
 export const SPROUT_STATUSES = ["open", "adopted", "rejected", "expired"] as const;

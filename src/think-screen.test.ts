@@ -58,7 +58,7 @@ describe("think screen", () => {
 		expect(short.join("\n")).toContain("[q] end session");
 	});
 
-	test("matches the SPEC mockup layout at 42 columns", () => {
+	test("matches the mockup layout at 42 columns", () => {
 		const lines = renderScreen(VIEW, 42, plain);
 		expect(lines.join("\n")).toBe(
 			[

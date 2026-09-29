@@ -1,4 +1,4 @@
-// The human/agent boundary on disk (SPEC "The human/agent boundary", guard 2).
+// The human/agent boundary on disk (roots-031e; guard 2).
 //
 // Every file an agent command writes (`sprout`, `note`) goes through
 // agentMkdir() / agentWriteExclusive(), which refuse any target that:
@@ -10,7 +10,7 @@
 //     .roots/agent/ or inside .roots/human/
 // Files are created with O_EXCL ("wx"), which never follows a symlink at the
 // final component. This covers accidental mixing, not a malicious actor with
-// shell access (SPEC threat model).
+// shell access (SECURITY.md).
 
 import { existsSync, lstatSync, mkdirSync, realpathSync, writeFileSync } from "node:fs";
 import { dirname, isAbsolute, relative, resolve, sep } from "node:path";

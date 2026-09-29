@@ -16,8 +16,8 @@
 //   merge   <a> <b>         duplicates; the human picks the survivor on accept
 //   compost <id>            stale or covered by other ideas
 // `--mention` (edge only): the agent cites only the mentioning line (in <a>
-// or <b>); roots adds the other idea's statement as the second cite (SPEC
-// "Mentions → proposals").
+// or <b>); roots adds the other idea's statement as the second cite
+// (roots-9c29).
 
 import { loadConfig, type RootsConfig } from "./config.ts";
 import { GuardError, UsageError, ValidationError } from "./errors.ts";
@@ -110,7 +110,7 @@ function liveIdea(node: NodeRecord): NodeRecord {
 	return node;
 }
 
-/** SPEC validation 1: the tier allows proposals, on every idea involved. */
+/** Validation 1: the tier allows proposals, on every idea involved. */
 function checkTiers(config: RootsConfig, nodes: readonly (NodeRecord | undefined)[]): void {
 	for (const node of nodes) {
 		if (node?.kind === "idea") requireTier(config, 2, "`roots propose`", node);

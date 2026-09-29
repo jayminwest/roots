@@ -1,10 +1,10 @@
 // roots commit <id> · roots status <id> <status> · roots compost <id>
 // (human, no TTY; refused inside an agent session). Transitions follow
-// SPEC "Idea Lifecycle" (src/lifecycle.ts). One `status` event per change;
+// src/lifecycle.ts. One `status` event per change;
 // `compost` logs a `compost` event with the optional reason.
 //
-// SPEC "Integration → Seeds": committing an idea "can prompt 'Create seeds
-// issues?' at tier ≥ 2". Implemented conservatively: when the idea's
+// Seeds integration (roots-4689): committing an idea can prompt "Create seeds
+// issues?" at tier ≥ 2. Implemented conservatively: when the idea's
 // effective tier is ≥ 2 and the repo has .seeds/, `roots commit` prints a
 // hint (and `seedsHint` in --json) on how to break the idea into issues that
 // link back to it. No agent runs and nothing is written to seeds: drafting

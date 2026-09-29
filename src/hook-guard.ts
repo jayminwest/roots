@@ -1,5 +1,5 @@
-// `roots guard`: the Claude Code PreToolUse hook (SPEC "The human/agent
-// boundary", guard 3). Pure decision logic; commands/guard.ts does the I/O.
+// `roots guard`: the Claude Code PreToolUse hook (roots-ecaa; human/agent
+// boundary guard 3). Pure decision logic; commands/guard.ts does the I/O.
 //
 // Input: the hook JSON on stdin ({tool_name, tool_input, cwd, ...}).
 //   Write | Edit | MultiEdit   tool_input.file_path
@@ -20,7 +20,7 @@
 //   - runs sed/perl with -i (in place), dd with of=..., or git
 //     checkout/restore/rm/mv/apply on it.
 // A shell can always evade this (cd first, variables, eval, scripts). The
-// SPEC threat model is accidental mixing, not a malicious actor.
+// The threat model (SECURITY.md) is accidental mixing, not a malicious actor.
 //
 // Unparsable input fails OPEN (allow, note on stderr): a broken hook must not
 // block every tool call in the session, and the other guards (no agent code

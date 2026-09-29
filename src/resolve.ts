@@ -1,6 +1,6 @@
 // Resolve a user-supplied node reference to exactly one node.
 //
-// Accepted forms (SPEC "IDs and slugs"): full id `r-a1b2`, bare hex `a1b2`,
+// Accepted forms (roots-4143): full id `r-a1b2`, bare hex `a1b2`,
 // slug `offline-sync`, or a unique prefix of any of them. Exact matches win
 // over prefix matches, in the order id > hex > slug. More than one match is
 // an AmbiguousError listing the candidates.

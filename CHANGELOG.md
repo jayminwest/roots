@@ -7,9 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-First implementation of [SPEC.md](SPEC.md), built in the spec's build order (stages 1-7).
+First implementation of roots (stages 1-7 of the original design spec).
 
 ### Changed
+- SPEC.md removed. Direction now lives in seeds issues and roots ideas.
 - Herdr split-pane support removed; `think` and `adopt` open split panes only inside tmux or
   zellij. Fixes `tend` → adopt opening a second pane under herdr.
 

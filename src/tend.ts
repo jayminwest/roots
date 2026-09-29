@@ -1,5 +1,5 @@
 // `roots tend`, pure part: cards and the key reducer (the card renderer lives in
-// tend-render.ts, SPEC "Structure (human)" card mockup). No I/O here; tend-session.ts is the
+// tend-render.ts, roots-9c29). No I/O here; tend-session.ts is the
 // shell that executes decisions.
 //
 // One card per decision. Pending edge proposals on the same unordered pair

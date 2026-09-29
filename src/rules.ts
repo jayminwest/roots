@@ -1,4 +1,4 @@
-// Deterministic question rules (SPEC "Questions: guiding thinking"). Pure.
+// Deterministic question rules (roots-b0ea). Pure.
 //
 // Each rule looks at one idea and may produce a question candidate. Rules
 // never re-ask a question the human dismissed for that idea, and never

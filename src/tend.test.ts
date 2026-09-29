@@ -160,7 +160,7 @@ describe("renderTend", () => {
 		expect(short.at(-1)).toBe("[q] quit");
 	});
 
-	test("the SPEC card mockup", () => {
+	test("the card mockup", () => {
 		const s = state([prop({})]);
 		const text = renderTend({ state: s, now: NOW, expired: 2 }, 70, makeColors(false)).join("\n");
 		expect(text).toContain("┌─ proposal p-0001 ── [agent] claude-opus-5-5 ── expires in 11d ─");

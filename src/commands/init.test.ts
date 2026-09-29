@@ -9,7 +9,7 @@ import { run, runJson, tempDir } from "../test-helpers.ts";
 import { ensureGitattributes, GITATTRIBUTES_LINE } from "./init.ts";
 
 describe("roots init", () => {
-	test("creates the SPEC layout", async () => {
+	test("creates the .roots layout", async () => {
 		const dir = tempDir();
 		const { exitCode, body } = await runJson<{ created: string[]; gitattributes: string }>(
 			["init"],

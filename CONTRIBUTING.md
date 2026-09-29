@@ -2,8 +2,8 @@
 
 Thanks for your interest in contributing to Roots. This guide covers what you need to get started.
 
-Read [SPEC.md](SPEC.md) before you change behavior. It is the design source of truth. If the code
-and the spec disagree, raise it in the issue or PR. Do not quietly pick one.
+Direction lives in seeds issues and roots ideas; there is no spec doc. If a change conflicts with
+recorded intent, raise it in the issue or PR. Do not quietly pick one.
 
 ## Getting Started
 

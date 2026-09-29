@@ -1,4 +1,4 @@
-// Deterministic mention detection (SPEC "Mentions → proposals", rule 1). Pure.
+// Deterministic mention detection (roots-9c29). Pure.
 //
 // A changed line mentions another idea when it contains:
 //   - the idea's id (`r-a1b2`), or

@@ -1,5 +1,5 @@
-// `roots drift`: which ideas a repo change touches (SPEC "Integration →
-// Claude Code": the tier-3 Stop hook `roots drift --diff HEAD`). Read-only
+// `roots drift`: which ideas a repo change touches (roots-4689: the
+// tier-3 Stop hook `roots drift --diff HEAD`). Read-only
 // and deterministic; no LLM. The agent reads the packet and may `roots ask`
 // "does this still hold?". Nothing here writes.
 //

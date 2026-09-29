@@ -1,7 +1,7 @@
 // Claude Code hook wiring for `roots setup claude`. Pure: settings in,
 // settings out.
 //
-// SPEC's snippet is simplified. The real Claude Code schema nests handlers in
+// The real Claude Code schema nests handlers in
 // matcher groups:
 //   {"hooks": {"<Event>": [{"matcher": "...", "hooks": [{"type": "command",
 //                                                         "command": "..."}]}]}}

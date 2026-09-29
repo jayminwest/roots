@@ -1,4 +1,4 @@
-// `roots prime`: the accepted graph as agent context (SPEC "Agent-facing").
+// `roots prime`: the accepted graph as agent context.
 // Anchors (top-level goals) with the ideas that serve them nested below,
 // tensions, per-idea tier overrides, and a short guide to using roots as an
 // agent. Read-only; only human prose and human-made edges appear. Sprouts,

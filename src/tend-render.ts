@@ -1,5 +1,4 @@
-// `roots tend`, pure renderer: draws the current card as a box (SPEC
-// "Structure (human)" card mockup). Split out of tend.ts (cards + reducer).
+// `roots tend`, pure renderer: draws the current card as a box (roots-9c29). Split out of tend.ts (cards + reducer).
 
 import type { Colors } from "./color.ts";
 import { edgeLabel, truncate } from "./format.ts";

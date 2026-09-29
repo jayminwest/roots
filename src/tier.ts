@@ -1,4 +1,4 @@
-// Agent tiers (SPEC "Agent Tiers"). Tiers only widen what an agent may
+// Agent tiers. Tiers only widen what an agent may
 // suggest; no tier lets an agent write human content.
 //
 //   0 off      nothing (deterministic questions only)

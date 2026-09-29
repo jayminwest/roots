@@ -1,4 +1,4 @@
-// questions.jsonl: asked questions and their status (SPEC "questions.jsonl").
+// questions.jsonl: asked questions and their status (roots-b0ea).
 //
 // Answers are never stored here: the answer is what the human wrote in
 // idea.md; the `answer` event records the diff span. Each mutation logs

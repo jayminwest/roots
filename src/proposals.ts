@@ -1,4 +1,4 @@
-// proposals.jsonl: pending agent/rule suggestions (SPEC "proposals.jsonl").
+// proposals.jsonl: pending agent/rule suggestions (roots-9c29).
 //
 // Everything that files a proposal goes through fileProposals(), which runs
 // the deterministic checks under the proposals lock:

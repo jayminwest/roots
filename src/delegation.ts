@@ -1,4 +1,4 @@
-// Delegated questions (SPEC "Delegating a question"): the human presses [a]
+// Delegated questions (roots-1a70): the human presses [a]
 // in think to hand a question to the agent. After the session, agent.command
 // (tier ≥ 1) gets the idea's context packet plus the delegated questions and
 // attaches one findings note per question (`roots note --question`, checked

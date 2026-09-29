@@ -1,5 +1,5 @@
 // roots setup claude [--project|--user] [--remove] [--dry-run]: wire roots
-// into Claude Code's hooks (SPEC "Integration → Claude Code").
+// into Claude Code's hooks (roots-ecaa).
 //
 //   SessionStart  roots prime --hook   (quiet outside a roots project)
 //   PreToolUse    roots guard          (Write|Edit|MultiEdit|NotebookEdit|Bash)

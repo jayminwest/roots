@@ -1,5 +1,5 @@
 // headings.jsonl: the agent's short read on where a `roots flow` session is
-// going (SPEC "Flow"). Advisory only: shown in the flow pane labeled [agent],
+// going (roots-6f2a). Advisory only: shown in the flow pane labeled [agent],
 // never in `view`, `prime` or any human file. Every write is validated
 // (AGENTS.md invariant 4):
 //

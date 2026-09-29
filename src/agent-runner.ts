@@ -1,5 +1,4 @@
-// Running the user-configured agent.command (SPEC "Questions: guiding
-// thinking"). roots contains no LLM (AGENTS.md invariant 2): this is the only
+// Running the user-configured agent.command (roots-e3a2). roots contains no LLM (AGENTS.md invariant 2): this is the only
 // place it starts an agent, and only the command the user configured.
 //
 // The command runs through `/bin/sh -c` in the project root, in its own
